@@ -1,5 +1,4 @@
 # This file was taken from Crazyswarm2/crazyflie/config and has been modified
-# named list of all robots
 robots:
   cf231:
     enabled: true
@@ -22,14 +21,7 @@ robots:
     uri: radio://0/80/2M/E7E7E7E705
     initial_position: [0, -0.5, 0]
     type: cf21  # see robot_types
-    # firmware_params:
-    #   kalman:
-    #     pNAcc_xy: 1.0 # default 0.5
-    #firmware_logging:
-    #  custom_topics:
-    #    topic_name3: 
-    #      frequency: 1
-    #      vars: ["acc.x", "acc.y", "acc.z"]
+
 # Definition of the various robot types
 robot_types:
   cf21:

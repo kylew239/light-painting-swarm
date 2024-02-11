@@ -45,7 +45,8 @@ def generate_launch_description():
             executable='flight',
             name='flight',
             on_exit=Shutdown(),
-        )
+        ),
 
+        #TODO: Include camera launch descritpion
 
 ])
