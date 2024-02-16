@@ -90,12 +90,18 @@ def dist(p1: Tuple,
     return math.sqrt(dx*dx + dy*dy)
 
 
-def order(tups_list: List[Tuple]) -> List[Tuple]:
+def generate_waypoints(tups_list: List[Tuple],
+                       xsize: float = None,
+                       ysize: float = None,
+                       xmargin: float = 0.0,
+                       ymargin: float = 0.0) -> List[Tuple]:
     sortedx = []
     sortedy = []
     curr_point = tups_list.pop()
     sortedx.append(curr_point[0])
     sortedy.append(curr_point[1])
+    xmin, xmax = curr_point[0], curr_point[0]
+    ymin, ymax = curr_point[1], curr_point[1]
 
     # while list isn't empty, keep searching
     while len(tups_list) > 0:
@@ -125,24 +131,54 @@ def order(tups_list: List[Tuple]) -> List[Tuple]:
 
         # update point, add to array, and remove from list
         curr_point = temp
-        sortedx.append(temp[0])
-        sortedy.append(temp[1])
-        tups_list.remove(temp)
+        sortedx.append(curr_point[0])
+        sortedy.append(curr_point[1])
+        tups_list.remove(curr_point)
+
+        # update mins and maxs
+        xmin = min(xmin, curr_point[0])
+        xmax = max(xmax, curr_point[0])
+        ymin = min(ymin, curr_point[1])
+        ymax = max(ymax, curr_point[1])
+
+
+    # Scale the image
+    if xsize is not None or ysize is not None:
+        # If either are not set, scale uniformly
+        if xsize is None:
+            xsize = ysize
+        if ysize is None:
+            ysize = xsize
+
+        # offset values from axis, calculated using margin percentage
+        xoffset = xmargin*xsize
+        yoffset = ymargin*ysize
+
+        # Scale to divide by, to fit everything within the margins
+        xscale = (xmax-xmin)/(xsize * (1-2*xmargin))
+        yscale = (ymax-ymin)/(ysize * (1-2*ymargin))
+
+        # Take each value, shift it over to the axis, and scale down
+        # Then add in the calculated offset values
+        sortedx = [(point - xmin)/xscale + xoffset for point in sortedx]
+        sortedy = [((point - ymin)/yscale + yoffset) for point in sortedy]
 
     return sortedx, sortedy
 
 
-arrx, arry = order(idx1_list)
-
-
-scalex = 100
-xcaley = 100
+xcanvas = 100
+ycanvas = 100
+arrx, arry = generate_waypoints(idx1_list,
+                                xcanvas,
+                                ycanvas,
+                                0.05,
+                                0.05)
 
 # Plotting
 fig, ax = plt.subplots()
-ax.set_xlim(0, 800)
-ax.set_ylim(0, 800)
-line, = ax.plot([], [], 'bo', markersize=0.1)
+ax.set_xlim(0, xcanvas)
+ax.set_ylim(0, ycanvas)
+line, = ax.plot([], [], marker='o', markersize=1, color='black', alpha=1.0, linestyle='None')
 
 # Function to update the plot for each frame of the animation
 def update(frame):
