@@ -90,28 +90,31 @@ def dist(p1: Tuple,
     return math.sqrt(dx*dx + dy*dy)
 
 
-def generate_waypoints(tups_list: List[Tuple],
-                       xsize: float = None,
-                       ysize: float = None,
-                       xmargin: float = 0.0,
-                       ymargin: float = 0.0) -> List[Tuple]:
+def generate_waypoints(idx_list: List[Tuple],
+                       xleft: float,
+                       ybot: float,
+                       xright: float,
+                       ytop: float,
+                       uniform_scale: bool = True) -> List[Tuple]:
+    # Rotate and flip the image
+    points = [(x, -y) for y, x in idx_list]
+
     sortedx = []
     sortedy = []
-    curr_point = tups_list.pop()
+    curr_point = points.pop()
     sortedx.append(curr_point[0])
     sortedy.append(curr_point[1])
     xmin, xmax = curr_point[0], curr_point[0]
     ymin, ymax = curr_point[1], curr_point[1]
 
     # while list isn't empty, keep searching
-    while len(tups_list) > 0:
-        # go through each point and find the next one to connect to
+    while len(points) > 0:
         temp = None
         close = None
         small_dist = math.inf
 
-        for point in tups_list:
-
+        # go through each point and find the next one to connect to
+        for point in points:
             # update closest neighbor
             if (dist(point, curr_point) < small_dist):
                 close = point
@@ -121,9 +124,7 @@ def generate_waypoints(tups_list: List[Tuple],
             # store it, and exit the loop
             if (adjacent(curr_point, point)):
                 temp = point
-
-                # exits the upper for loop
-                break
+                break  # exits the upper for loop
 
         # if there is no next point
         if temp == None:
@@ -133,7 +134,7 @@ def generate_waypoints(tups_list: List[Tuple],
         curr_point = temp
         sortedx.append(curr_point[0])
         sortedy.append(curr_point[1])
-        tups_list.remove(curr_point)
+        points.remove(curr_point)
 
         # update mins and maxs
         xmin = min(xmin, curr_point[0])
@@ -141,54 +142,64 @@ def generate_waypoints(tups_list: List[Tuple],
         ymin = min(ymin, curr_point[1])
         ymax = max(ymax, curr_point[1])
 
+    # Calculate scaling values
+    xscale = (xright-xleft)/(xmax-xmin)
+    yscale = (ytop-ybot)/(ymax-ymin)
 
-    # Scale the image
-    if xsize is not None or ysize is not None:
-        # If either are not set, scale uniformly
-        if xsize is None:
-            xsize = ysize
-        if ysize is None:
-            ysize = xsize
+    if uniform_scale:
+        # Scale to the min value
+        scale = min(xscale, yscale)
 
-        # offset values from axis, calculated using margin percentage
-        xoffset = xmargin*xsize
-        yoffset = ymargin*ysize
+        # Calculate centers
+        xcenter = (xleft+xright)/2
+        ycenter = (ytop+ybot)/2
 
-        # Scale to divide by, to fit everything within the margins
-        xscale = (xmax-xmin)/(xsize * (1-2*xmargin))
-        yscale = (ymax-ymin)/(ysize * (1-2*ymargin))
+        # Calculate center of original image
+        xcenter_img = (xmin+xmax)/2
+        ycenter_img = (ymin+ymax)/2
 
-        # Take each value, shift it over to the axis, and scale down
-        # Then add in the calculated offset values
-        sortedx = [(point - xmin)/xscale + xoffset for point in sortedx]
-        sortedy = [((point - ymin)/yscale + yoffset) for point in sortedy]
+        # Scale and shift using centers to make sure image is centered
+        sortedx = [xcenter + (point-xcenter_img)*scale for point in sortedx]
+        sortedy = [ycenter + (point-ycenter_img)*scale for point in sortedy]
+
+    else:
+        # Non-uniform scaling would force the imagee to fit the whole
+        # area, so centering is not needed
+        sortedx = [xleft+(point-xmin)*xscale for point in sortedx]
+        sortedy = [ybot+(point-ymin)*yscale for point in sortedy]
 
     return sortedx, sortedy
 
 
-xcanvas = 100
-ycanvas = 100
-arrx, arry = generate_waypoints(idx1_list,
-                                xcanvas,
-                                ycanvas,
-                                0.05,
-                                0.05)
+xleft = -45
+xright = 45
+ybot = -45
+ytop = 45
+arrx, arry = generate_waypoints(idx2_list,
+                                xleft,
+                                ybot,
+                                xright,
+                                ytop)
 
 # Plotting
 fig, ax = plt.subplots()
-ax.set_xlim(0, xcanvas)
-ax.set_ylim(0, ycanvas)
-line, = ax.plot([], [], marker='o', markersize=1, color='black', alpha=1.0, linestyle='None')
+ax.set_xlim(-50, 50)
+ax.set_ylim(-50, 50)
+line, = ax.plot([], [], marker='o', markersize=1,
+                color='black', alpha=1.0, linestyle='None')
 
 # Function to update the plot for each frame of the animation
+
+
 def update(frame):
     if frame < len(arrx):
-        y = arrx[:frame+1]
-        x = arry[:frame+1]
+        x = arrx[:frame+1]
+        y = arry[:frame+1]
         line.set_data(x, y)
         return line,
     else:
         return line,
+
 
 # Create the animation
 ani = FuncAnimation(fig,
