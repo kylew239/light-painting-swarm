@@ -6,39 +6,36 @@ from typing import List, Tuple
 import math
 
 
-# Read the original image
-img = cv2.imread('tree.jpg')
-img2 = cv2.imread('cube.png')
+def edge_detect(img: str,
+                t1: int = 400,
+                t2: int = 500) -> list(Tuple(int, int)):
+    """
+    Finds the pixels that represents the edges in an image,\
+    using Canny Edge Detection
 
-# Convert to graycsale
-img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-img2_gray = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+    Args:
+        img (str): Filename of the image
+        t1 (int, optional): First threshold value for edge\
+            detection. Defaults to 400.
+        t2 (int, optional): Second threshold value for edge\
+            detection. Defaults to 500.
 
-# Blur the image for better edge detection
-img_blur = cv2.GaussianBlur(img_gray, (3, 3), 0)
-img2_blur = cv2.GaussianBlur(img2_gray, (3, 3), 0)
+    Returns
+    -------
+        A list of tuples: A list of pixels
+    """
+    img = cv2.imread(img)
 
-# Edge Detection
-t1 = 400
-t2 = 500
-edges = cv2.Canny(image=img_blur, threshold1=t1,
-                  threshold2=t2)  # Canny Edge Detection
-edges2 = cv2.Canny(image=img2_blur, threshold1=t1,
-                   threshold2=t2)  # Canny Edge Detection
+    # get grayscale and blur for better edge detection
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    img = cv2.GaussianBlur(img, (3, 3), 0)
 
-# Display Canny Edge Detection Image
+    # Canny edge detection
+    img = cv2.Canny(image=img, threshold1=t1, threshold2=t2)
 
-idx1 = np.nonzero(edges)
-idx1_list = list(zip(idx1[0], idx1[1]))
-
-idx2 = np.nonzero(edges2)
-idx2_list = list(zip(idx2[0], idx2[1]))
-
-# new_list = idx1_list[::5]
-# for item in new_list:
-#     x = float(item[1]) / 100.0
-#     y = float(item[0]) / -100.0
-#     print("(", x, ",", y, ")")
+    # Get list of pixels represnting the edges
+    idx = np.nonzero(img)
+    return list(zip(idx[0], idx[1]))
 
 
 def adjacent(p1: Tuple,
@@ -186,6 +183,9 @@ def generate_waypoints(idx_list: List[Tuple],
         sortedy = [ybot+(point-ymin)*yscale for point in sortedy]
 
     return sortedx, sortedy
+
+
+idx2_list = edge_detect('tree.jpg')
 
 
 xleft = -45
