@@ -1,18 +1,19 @@
 import rclpy
 from rclpy.node import Node
 from enum import Enum, auto
-from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from crazyflie_interfaces.srv import Takeoff, Land, GoTo, StartTrajectory, UploadTrajectory
 from crazyflie_interfaces.msg import TrajectoryPolynomialPiece
 from std_srvs.srv import Empty
 from builtin_interfaces.msg import Duration
-from geometry_msgs.msg import Point, Pose
+from geometry_msgs.msg import Point, PoseStamped
 from rclpy.parameter import Parameter
 import rclpy
 
 import asyncio
 from time import sleep
+
 
 class State(Enum):
     """Determine the states of the drone."""
@@ -23,6 +24,7 @@ class State(Enum):
     PAINTING = auto(),
     STOPPING = auto(),
 
+
 class Flight(Node):
 
     def __init__(self):
@@ -30,75 +32,82 @@ class Flight(Node):
         self.height = 0.30
         self.prev_state = State.STOPPED
         self.state = State.STOPPED
-        self.prev_pose = Pose()      
-        self.trajectory_id = 0;  
+        self.prev_pose = Point()
+        self.trajectory_id = 0
+        self.pose_counter = 0       # TODO: remove counter
+
+        self.cb_group = MutuallyExclusiveCallbackGroup()
 
         # Service clients
         self.cf_takeoff = self.create_client(Takeoff,
-                                        "/cf231/takeoff",
-                                        callback_group=ReentrantCallbackGroup())
+                                             "/cf231/takeoff",
+                                             callback_group=self.cb_group)
         self.cf_land = self.create_client(Land,
-                                     "/cf231/land",
-                                     callback_group=ReentrantCallbackGroup())
+                                          "/cf231/land",
+                                          callback_group=self.cb_group)
         self.cf_goto = self.create_client(GoTo,
-                                     "/cf231/go_to",
-                                     callback_group=ReentrantCallbackGroup())
-        
+                                          "/cf231/go_to",
+                                          callback_group=self.cb_group)
+
         self.upload_trajectory = self.create_client(UploadTrajectory,
-                                          "/cf231/upload_trajectory",
-                                          callback_group=ReentrantCallbackGroup())
+                                                    "/cf231/upload_trajectory",
+                                                    callback_group=self.cb_group)
 
         self.traj = self.create_client(StartTrajectory,
-                                        "/cf231/start_trajectory",
-                                        callback_group=ReentrantCallbackGroup())
-        
+                                       "/cf231/start_trajectory",
+                                       callback_group=self.cb_group)
+
         self.shutter_start = self.create_client(Empty,
                                                 "shutter_start",
-                                                callback_group=ReentrantCallbackGroup())
-        
+                                                callback_group=self.cb_group)
+
         self.shutter_stop = self.create_client(Empty,
                                                "shutter_stop",
-                                               callback_group=ReentrantCallbackGroup())
-        
+                                               callback_group=self.cb_group)
+
         # Service Servers
         self.start = self.create_service(Empty,
-                                    "start",
-                                    self.start_callback)
-        
-        #TODO:
+                                         "start",
+                                         self.start_callback)
+
+        # TODO:
         self.upload = self.create_service(Empty,
                                           "cube",
                                           self.upload_cb)
 
-        # State Subscriber
-        self.pose_sub = self.create_subscription(Pose,
+        # # State Subscriber
+        self.pose_sub = self.create_subscription(PoseStamped,
                                                  "/cf231/pose",
                                                  self.pose_cb, 10)
-        
+
         # Timer
-        self.timer = self.create_timer(1.0/200.0, self.timer_cb)
-        
+        self.timer = self.create_timer(1.0/10.0, self.timer_cb)
 
     def upload_cb(self, request, response):
         req = UploadTrajectory.Request()
         req.trajectory_id = self.trajectory_id
 
         # TODO: Temporary geometry
-        x = [0, 1, 1, 0, 0, 1, 1, 0]
-        y = [-0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5]
-        z = [0.3, 0.3, 0.3, 0.3, 1.3, 1.3, 1.3, 1.3]
+        # x = [0, 1, 1, 0, 0, 1, 1, 0]
+        # y = [-0.3, -0.3, 0.3, 0.3, -0.3, -0.3, 0.3, 0.3]
+        # z = [0.3, 0.3, 0.3, 0.3, 0.9, 0.9, 0.9, 0.9]
+
+        # Relative
+        x = [0, 1, 0, -1, 0, 1, 0, -1]
+        y = [-0.3, 0, 0.6, 0, -0.6, 0, 0.6, 0.0]
+        z = [0.0, 0.0, 0.0, 0.0, 0.5, 0, 0, 0]
 
         temp = TrajectoryPolynomialPiece()
         temp.poly_x = x
         temp.poly_y = y
         temp.poly_z = z
+        temp.duration = Duration(sec=2)
         temp.poly_yaw = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        
+
         req.pieces = [temp]
 
         self.upload_trajectory.call_async(req)
         return response
-
 
     async def start_callback(self, request, response):
         self.state = State.TAKEOFF
@@ -112,7 +121,7 @@ class Flight(Node):
         # self.state = State.MOVING
         # self.get_logger().error("taking off")
         # await self.cf_takeoff.call_async(takeoffReq)
-        # sleep(2) # check pose 
+        # sleep(2) # check pose
 
         # await self.shutter_start.call_async(emp)
 
@@ -162,27 +171,31 @@ class Flight(Node):
 
     def pose_cb(self, msg):
         # Check if crazyflie has stopped moving and is ready for next command
-        pose = msg.pose.position
-        x_diff = abs(pose.x-self.prev_pose.position.x)
-        y_diff = abs(pose.y-self.prev_pose.position.y)
-        z_diff = abs(pose.z-self.prev_pose.position.z)
-        self.prev_pose = pose
+        pos = msg.pose.position
+        x_diff = abs(pos.x-self.prev_pose.x)
+        y_diff = abs(pos.y-self.prev_pose.y)
+        z_diff = abs(pos.z-self.prev_pose.z)
+        self.prev_pose = pos
         if self.state == State.FLYING:
-            self.get_logger().error("not switching states")
+            if (x_diff < 0.01 and y_diff < 0.01 and z_diff < 0.01):
+                if self.pose_counter > 30:
+                    # Update state for next timer action
+                    self.get_logger().error("Stopped moving")
+                    if self.prev_state == State.TAKEOFF:
+                        self.state = State.PAINTING
 
-        if(x_diff < 0.01 and y_diff < 0.01 and z_diff < 0.01):
-            # Update state for next timer action
-            self.get_logger().error("SWITCHING STATES")
-            if self.prev_state == State.TAKEOFF:
-                self.state = State.PAINTING
-    
-            if self.prev_state == State.PAINTING:
-                self.state = State.STOPPING
-        
+                    if self.prev_state == State.PAINTING:
+                        self.state = State.STOPPING
+                else:
+                    self.pose_counter += 1
+            else:
+                self.pose_counter = 0
+        else:
+            self.pose_counter = 0
 
     async def timer_cb(self):
         if self.state == State.TAKEOFF:
-            test = Duration(sec = 1)
+            test = Duration(sec=1)
             takeoffReq = Takeoff.Request()
             takeoffReq.height = 0.3
             takeoffReq.duration = test
@@ -191,34 +204,30 @@ class Flight(Node):
             self.prev_state = State.TAKEOFF
             await self.cf_takeoff.call_async(takeoffReq)
 
-            
-
         if self.state == State.PAINTING:
-            self.get_logger().error("starting shutter")
-            await self.shutter_start.call_async(Empty.Request())
+            # self.get_logger().error("starting shutter")
+            # await self.shutter_start.call_async(Empty.Request())
             trajReq = StartTrajectory.Request()
             trajReq.trajectory_id = self.trajectory_id
-            trajReq.relative = False
-            trajReq.reversed = True
+            trajReq.relative = True
+            trajReq.reversed = False
+            trajReq.timescale = 1.0
             self.get_logger().error("starting path")
             self.state = State.FLYING
             self.prev_state = State.PAINTING
             await self.traj.call_async(trajReq)
 
-            
-
-        if self.state == State.STOPPING:
-            self.get_logger().error("stopping shutter")
-            await self.shutter_stop.call_async(Empty.Request())
-            landReq = Land.Request()
-            landReq.height = 0.5
-            landReq.duration = test
-            self.get_logger().error('landing')
-            self.state = State.STOPPED
-            self.prev_state = State.PAINTING
-            await self.cf_land.call_async(landReq)
-        
-
+        # if self.state == State.STOPPING:
+        #     test = Duration(sec = 1)
+        #     self.get_logger().error("stopping shutter")
+        #     await self.shutter_stop.call_async(Empty.Request())
+        #     landReq = Land.Request()
+        #     landReq.height = 0.5
+        #     landReq.duration = test
+        #     self.get_logger().error('landing')
+        #     self.state = State.STOPPED
+        #     self.prev_state = State.PAINTING
+        #     await self.cf_land.call_async(landReq)
 
 
 def main(args=None):

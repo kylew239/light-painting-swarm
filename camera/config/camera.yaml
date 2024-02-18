@@ -1,4 +1,4 @@
 camera:
   ros__parameters:
     arduino_pin: 8
-    arduino_port: '/dev/ttyACM0'
+    arduino_port: '/dev/ttyACM1'
