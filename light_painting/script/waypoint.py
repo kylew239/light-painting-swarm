@@ -4,11 +4,12 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from typing import List, Tuple
 import math
+import csv
 
 
 def edge_detect(img: str,
                 t1: int = 400,
-                t2: int = 500) -> list(Tuple(int, int)):
+                t2: int = 500) -> List[Tuple]:
     """
     Finds the pixels that represents the edges in an image,\
     using Canny Edge Detection
@@ -92,6 +93,7 @@ def generate_waypoints(idx_list: List[Tuple],
                        ybot: float,
                        xright: float,
                        ytop: float,
+                       resolution: float,
                        uniform_scale: bool = True) -> (List[float], List[float]):
     """
     Generate a list of waypoints
@@ -182,47 +184,70 @@ def generate_waypoints(idx_list: List[Tuple],
         sortedx = [xleft+(point-xmin)*xscale for point in sortedx]
         sortedy = [ybot+(point-ymin)*yscale for point in sortedy]
 
-    return sortedx, sortedy
+    # remove unnecessary points based on resolution
+    currx = math.inf
+    curry = math.inf
+    x = []
+    y = []
+
+    for i in range(len(sortedx)-1):
+        if(dist((currx, curry), (sortedx[i], sortedy[i])) > resolution):
+            currx = sortedx[i]
+            curry = sortedy[i]
+            x.append(currx)
+            y.append(curry)
+
+    return (x, y)
 
 
 idx2_list = edge_detect('tree.jpg')
 
 
-xleft = -45
-xright = 45
-ybot = -45
-ytop = 45
-arrx, arry = generate_waypoints(idx2_list,
+xleft = 0.05
+xright = 0.95
+ybot = 0.3
+ytop = 0.7
+(arrx, arry) = generate_waypoints(idx2_list,
                                 xleft,
                                 ybot,
                                 xright,
-                                ytop)
+                                ytop,
+                                0.1)
 
-# Plotting
-fig, ax = plt.subplots()
-ax.set_xlim(-50, 50)
-ax.set_ylim(-50, 50)
-line, = ax.plot([], [], marker='o', markersize=1,
-                color='black', alpha=1.0, linestyle='None')
+# # Plotting
+# fig, ax = plt.subplots()
+# ax.set_xlim(-50, 50)
+# ax.set_ylim(-50, 50)
+# line, = ax.plot([], [], marker='o', markersize=1,
+#                 color='black', alpha=1.0, linestyle='None')
+
+def generate_csv(x, z):
+    filename = "/home/kyle/winterProject/src/uav_trajectories/build/test.csv"
+    with open(filename, 'w') as csvfile:
+        writer = csv.writer(csvfile)
+        for i in range(len(x)):
+            t = [x[i], 0.0, z[i]]
+            writer.writerow(t)
+
+print(len(arry))
+generate_csv(arrx, arry)
 
 # Function to update the plot for each frame of the animation
+# def update(frame):
+#     if frame < len(arrx):
+#         x = arrx[:frame+1]
+#         y = arry[:frame+1]
+#         line.set_data(x, y)
+#         return line,
+#     else:
+#         return line,
 
 
-def update(frame):
-    if frame < len(arrx):
-        x = arrx[:frame+1]
-        y = arry[:frame+1]
-        line.set_data(x, y)
-        return line,
-    else:
-        return line,
+# # Create the animation
+# ani = FuncAnimation(fig,
+#                     update,
+#                     frames=len(arrx)+1,
+#                     blit=True,
+#                     interval=1)
 
-
-# Create the animation
-ani = FuncAnimation(fig,
-                    update,
-                    frames=len(arrx)+1,
-                    blit=True,
-                    interval=1)
-
-plt.show()
+# plt.show()

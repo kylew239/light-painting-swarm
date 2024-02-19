@@ -11,6 +11,7 @@ from geometry_msgs.msg import Point, PoseStamped
 from rclpy.parameter import Parameter
 import rclpy
 
+import csv
 import asyncio
 from time import sleep
 
@@ -23,6 +24,7 @@ class State(Enum):
     TAKEOFF = auto(),
     PAINTING = auto(),
     STOPPING = auto(),
+    HOMING = auto()
 
 
 class Flight(Node):
@@ -86,25 +88,36 @@ class Flight(Node):
     def upload_cb(self, request, response):
         req = UploadTrajectory.Request()
         req.trajectory_id = self.trajectory_id
+        temp = TrajectoryPolynomialPiece()
+
+        # Read csv and get data
+        filename = "/home/kyle/winterProject/src/uav_trajectories/build/traj.csv"
+        with open(filename, mode='r') as file:
+            csvFile = csv.reader(file)
+            data = list(csvFile)
+
+        data.pop(0) # Get rid of heading
+        for traj in data:
+            # Get values from csv
+            temp.duration = Duration(nanosec=(int(float(traj[0])*1e9)))
+            temp.poly_x = [float(traj[i]) for i in range(1, 9)]
+            temp.poly_y = [float(traj[i]) for i in range(9, 17)]
+            temp.poly_z = [float(traj[i]) for i in range(17, 25)]
+            temp.poly_yaw = [float(traj[i]) for i in range(25, 33)]
+
+
+            # append to the trajectory
+            req.pieces.append(temp)
 
         # TODO: Temporary geometry
         # x = [0, 1, 1, 0, 0, 1, 1, 0]
         # y = [-0.3, -0.3, 0.3, 0.3, -0.3, -0.3, 0.3, 0.3]
         # z = [0.3, 0.3, 0.3, 0.3, 0.9, 0.9, 0.9, 0.9]
 
-        # Relative
-        x = [0, 1, 0, -1, 0, 1, 0, -1]
-        y = [-0.3, 0, 0.6, 0, -0.6, 0, 0.6, 0.0]
-        z = [0.0, 0.0, 0.0, 0.0, 0.5, 0, 0, 0]
-
-        temp = TrajectoryPolynomialPiece()
-        temp.poly_x = x
-        temp.poly_y = y
-        temp.poly_z = z
-        temp.duration = Duration(sec=2)
-        temp.poly_yaw = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-
-        req.pieces = [temp]
+        # # Relative
+        # x = [0, 0, 0, 0, 0, 0, 0.1, 0]
+        # y = [0, 0, 0, 0, 0, 0, 0.1, 0]
+        # z = [0, 0, 0, 0, 0, 0, 0, 0]
 
         self.upload_trajectory.call_async(req)
         return response
@@ -182,10 +195,13 @@ class Flight(Node):
                     # Update state for next timer action
                     self.get_logger().error("Stopped moving")
                     if self.prev_state == State.TAKEOFF:
-                        self.state = State.PAINTING
+                        self.state = State.HOMING
 
                     if self.prev_state == State.PAINTING:
                         self.state = State.STOPPING
+                    
+                    if self.prev_state == State.HOMING:
+                        self.state = State.PAINTING
                 else:
                     self.pose_counter += 1
             else:
@@ -203,19 +219,32 @@ class Flight(Node):
             self.state = State.FLYING
             self.prev_state = State.TAKEOFF
             await self.cf_takeoff.call_async(takeoffReq)
+            self.pose_counter = 0
+
+        if self.state == State.HOMING:
+            gotoReq = GoTo.Request()
+            gotoReq.relative = False
+            gotoReq.goal = Point(x=0.5, y=-0.5, z=0.3)
+            gotoReq.duration = Duration(sec=1)
+            self.state = State.FLYING
+            self.prev_state = State.HOMING
+            self.get_logger().error('flying home')
+            await self.cf_goto.call_async(gotoReq)
+            self.pose_counter = 0
 
         if self.state == State.PAINTING:
             # self.get_logger().error("starting shutter")
             # await self.shutter_start.call_async(Empty.Request())
             trajReq = StartTrajectory.Request()
             trajReq.trajectory_id = self.trajectory_id
-            trajReq.relative = True
+            trajReq.relative = False
             trajReq.reversed = False
             trajReq.timescale = 1.0
             self.get_logger().error("starting path")
             self.state = State.FLYING
             self.prev_state = State.PAINTING
             await self.traj.call_async(trajReq)
+            self.pose_counter = 0
 
         # if self.state == State.STOPPING:
         #     test = Duration(sec = 1)
