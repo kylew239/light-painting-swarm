@@ -200,19 +200,19 @@ def generate_waypoints(idx_list: List[Tuple],
     return (x, y)
 
 
-idx2_list = edge_detect('tree.jpg')
+idx2_list = edge_detect('cube.png')
 
 
 xleft = 0.05
 xright = 0.95
 ybot = 0.3
-ytop = 0.7
+ytop = 1.3
 (arrx, arry) = generate_waypoints(idx2_list,
                                 xleft,
                                 ybot,
                                 xright,
                                 ytop,
-                                0.1)
+                                0.01)
 
 # # Plotting
 # fig, ax = plt.subplots()
@@ -226,7 +226,7 @@ def generate_csv(x, z):
     with open(filename, 'w') as csvfile:
         writer = csv.writer(csvfile)
         for i in range(len(x)):
-            t = [x[i], 0.0, z[i]]
+            t = [x[i], -0.5, z[i]]
             writer.writerow(t)
 
 print(len(arry))

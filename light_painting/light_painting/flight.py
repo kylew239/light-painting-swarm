@@ -12,7 +12,7 @@ from rclpy.parameter import Parameter
 import rclpy
 
 import csv
-import asyncio
+import math
 from time import sleep
 
 
@@ -22,9 +22,10 @@ class State(Enum):
     STOPPED = auto(),
     FLYING = auto(),
     TAKEOFF = auto(),
-    PAINTING = auto(),
+    CAMERA = auto(),
     STOPPING = auto(),
-    HOMING = auto()
+    HOMING = auto(),
+    WAYPOINT = auto()
 
 
 class Flight(Node):
@@ -34,10 +35,17 @@ class Flight(Node):
         self.height = 0.30
         self.prev_state = State.STOPPED
         self.state = State.STOPPED
-        self.prev_pose = Point()
-        self.trajectory_id = 0
-        self.pose_counter = 0       # TODO: remove counter
+        self.waypoints = []
+        self.next_pos = Point()
+        self.goal = Point()
+        self.current_pos = Point()
 
+        # Goto request
+        self.gotoReq = GoTo.Request()
+        self.gotoReq.relative = False
+        self.gotoReq.duration = Duration(sec=1)
+
+        # Use a singular callback group to ensure services don't hang
         self.cb_group = MutuallyExclusiveCallbackGroup()
 
         # Service clients
@@ -86,40 +94,14 @@ class Flight(Node):
         self.timer = self.create_timer(1.0/10.0, self.timer_cb)
 
     def upload_cb(self, request, response):
-        req = UploadTrajectory.Request()
-        req.trajectory_id = self.trajectory_id
-        temp = TrajectoryPolynomialPiece()
-
         # Read csv and get data
-        filename = "/home/kyle/winterProject/src/uav_trajectories/build/traj.csv"
+        filename = "/home/kyle/winterProject/src/uav_trajectories/build/test.csv"
         with open(filename, mode='r') as file:
             csvFile = csv.reader(file)
-            data = list(csvFile)
+            self.waypoints = list(csvFile)
 
-        data.pop(0) # Get rid of heading
-        for traj in data:
-            # Get values from csv
-            temp.duration = Duration(nanosec=(int(float(traj[0])*1e9)))
-            temp.poly_x = [float(traj[i]) for i in range(1, 9)]
-            temp.poly_y = [float(traj[i]) for i in range(9, 17)]
-            temp.poly_z = [float(traj[i]) for i in range(17, 25)]
-            temp.poly_yaw = [float(traj[i]) for i in range(25, 33)]
+        self.get_logger().error(f"Successfully saved {len(self.waypoints)} points")
 
-
-            # append to the trajectory
-            req.pieces.append(temp)
-
-        # TODO: Temporary geometry
-        # x = [0, 1, 1, 0, 0, 1, 1, 0]
-        # y = [-0.3, -0.3, 0.3, 0.3, -0.3, -0.3, 0.3, 0.3]
-        # z = [0.3, 0.3, 0.3, 0.3, 0.9, 0.9, 0.9, 0.9]
-
-        # # Relative
-        # x = [0, 0, 0, 0, 0, 0, 0.1, 0]
-        # y = [0, 0, 0, 0, 0, 0, 0.1, 0]
-        # z = [0, 0, 0, 0, 0, 0, 0, 0]
-
-        self.upload_trajectory.call_async(req)
         return response
 
     async def start_callback(self, request, response):
@@ -183,80 +165,96 @@ class Flight(Node):
         return response
 
     def pose_cb(self, msg):
-        # Check if crazyflie has stopped moving and is ready for next command
-        pos = msg.pose.position
-        x_diff = abs(pos.x-self.prev_pose.x)
-        y_diff = abs(pos.y-self.prev_pose.y)
-        z_diff = abs(pos.z-self.prev_pose.z)
-        self.prev_pose = pos
+        self.current_pos = msg.pose.position
+        # Check if crazyflie should be moving
         if self.state == State.FLYING:
-            if (x_diff < 0.01 and y_diff < 0.01 and z_diff < 0.01):
-                if self.pose_counter > 30:
-                    # Update state for next timer action
-                    self.get_logger().error("Stopped moving")
-                    if self.prev_state == State.TAKEOFF:
-                        self.state = State.HOMING
+            # Check if crazyflie is close enough to the goal
+            if close(self.current_pos, self.goal):
+                if self.prev_state == State.HOMING:
+                    self.state = State.CAMERA
 
-                    if self.prev_state == State.PAINTING:
-                        self.state = State.STOPPING
-                    
-                    if self.prev_state == State.HOMING:
-                        self.state = State.PAINTING
-                else:
-                    self.pose_counter += 1
-            else:
-                self.pose_counter = 0
-        else:
-            self.pose_counter = 0
+                if self.prev_state == State.WAYPOINT:
+                    self.state = State.WAYPOINT
+            # else:
+            #     # self.get_logger().error(f"Distance: {b}")
+            #     # self.get_logger().error(f"C: {self.current_pos} ||| G: {self.goal}")
+
+            # Takeoff doesn't maintain x and y distances
+            # Need to calculate seperately
+            if self.prev_state == State.TAKEOFF:
+                if self.current_pos.z >= 0.3:  # Takeoff Height TODO: Make into parameter
+                    self.state = State.HOMING
 
     async def timer_cb(self):
+        # self.get_logger().error(f"Current state: {self.state} and previous state: {self.prev_state}")
         if self.state == State.TAKEOFF:
-            test = Duration(sec=1)
-            takeoffReq = Takeoff.Request()
-            takeoffReq.height = 0.3
-            takeoffReq.duration = test
             self.get_logger().error("taking off")
             self.state = State.FLYING
             self.prev_state = State.TAKEOFF
+
+            takeoffReq = Takeoff.Request()
+            takeoffReq.height = 0.3
+            takeoffReq.duration = Duration(sec=1)
+
+            self.goal = self.current_pos
+            self.goal.z = self.goal.z + 0.3
+
             await self.cf_takeoff.call_async(takeoffReq)
             self.pose_counter = 0
 
         if self.state == State.HOMING:
-            gotoReq = GoTo.Request()
-            gotoReq.relative = False
-            gotoReq.goal = Point(x=0.5, y=-0.5, z=0.3)
-            gotoReq.duration = Duration(sec=1)
+            self.get_logger().error('flying to first point')
             self.state = State.FLYING
             self.prev_state = State.HOMING
-            self.get_logger().error('flying home')
-            await self.cf_goto.call_async(gotoReq)
+
+            # Fly to goal
+            self.gotoReq.goal = self.goal
+            await self.cf_goto.call_async(self.gotoReq)
             self.pose_counter = 0
 
-        if self.state == State.PAINTING:
-            # self.get_logger().error("starting shutter")
-            # await self.shutter_start.call_async(Empty.Request())
-            trajReq = StartTrajectory.Request()
-            trajReq.trajectory_id = self.trajectory_id
-            trajReq.relative = False
-            trajReq.reversed = False
-            trajReq.timescale = 1.0
-            self.get_logger().error("starting path")
+        if self.state == State.CAMERA:
+            self.get_logger().error("starting Camera")
+            self.state = State.WAYPOINT
+            self.prev_state = State.CAMERA
+
+            # Start Camera
+            self.get_logger().error("starting shutter")
+            await self.shutter_start.call_async(Empty.Request())
+
+        if self.state == State.WAYPOINT:
+            self.get_logger().error("moving to next point")
+            self.get_logger().error(f"Points left: {len(self.waypoints)}")
             self.state = State.FLYING
-            self.prev_state = State.PAINTING
-            await self.traj.call_async(trajReq)
-            self.pose_counter = 0
+            self.prev_state = State.WAYPOINT
 
-        # if self.state == State.STOPPING:
-        #     test = Duration(sec = 1)
-        #     self.get_logger().error("stopping shutter")
-        #     await self.shutter_stop.call_async(Empty.Request())
-        #     landReq = Land.Request()
-        #     landReq.height = 0.5
-        #     landReq.duration = test
-        #     self.get_logger().error('landing')
-        #     self.state = State.STOPPED
-        #     self.prev_state = State.PAINTING
-        #     await self.cf_land.call_async(landReq)
+            # If there are waypoints left, continue navigating
+            if len(self.waypoints) > 0:
+                point = self.waypoints.pop(0)
+                self.goal = Point(
+                    x=float(point[0]),
+                    y=float(point[1]),
+                    z=float(point[2])
+                )
+
+                self.gotoReq.goal = self.goal
+                await self.cf_goto.call_async(self.gotoReq)
+                self.pose_counter = 0
+
+            # No waypoints left, stopping
+            else:
+                self.state = State.STOPPING
+
+        if self.state == State.STOPPING:
+            self.state = State.STOPPED
+            self.prev_state = State.CAMERA
+            self.get_logger().error("stopping shutter")
+            await self.shutter_stop.call_async(Empty.Request())
+
+            self.get_logger().error('landing')
+            landReq = Land.Request()
+            landReq.height = 0.3
+            landReq.duration = Duration(sec = 1)
+            await self.cf_land.call_async(landReq)
 
 
 def main(args=None):
@@ -264,3 +262,17 @@ def main(args=None):
     flight = Flight()
     rclpy.spin(flight)
     rclpy.shutdown()
+
+
+def close(p1: Point,
+          p2: Point,
+          threshold: float = 0.015,
+          absolute: bool = False) -> bool:
+    dx = abs(p1.x-p2.x)
+    dy = abs(p1.y-p2.y)
+    dz = abs(p1.z-p2.z)
+
+    if absolute:
+        return ((dx <= threshold) and (dy <= threshold) and (dz <= threshold))
+    else:
+        return (math.sqrt(dx**2 + dy**2 + dz**2) <= threshold)
