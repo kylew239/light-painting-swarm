@@ -4,12 +4,11 @@ from enum import Enum, auto
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from crazyflie_interfaces.srv import Takeoff, Land, GoTo, StartTrajectory, UploadTrajectory
-from crazyflie_interfaces.msg import TrajectoryPolynomialPiece
 from std_srvs.srv import Empty
 from builtin_interfaces.msg import Duration
 from geometry_msgs.msg import Point, PoseStamped
-from rclpy.parameter import Parameter
-import rclpy
+from rcl_interfaces.srv import SetParameters
+from rcl_interfaces.msg import Parameter
 
 import csv
 import math
@@ -49,6 +48,7 @@ class Flight(Node):
         self.cb_group = MutuallyExclusiveCallbackGroup()
 
         # Service clients
+        # Crazyflie Server
         self.cf_takeoff = self.create_client(Takeoff,
                                              "/cf231/takeoff",
                                              callback_group=self.cb_group)
@@ -67,6 +67,11 @@ class Flight(Node):
                                        "/cf231/start_trajectory",
                                        callback_group=self.cb_group)
 
+        self.set_param = self.create_client(SetParameters,
+                                            "/crazyflie_server/set_parameters",
+                                            callback_group=self.cb_group)
+
+        # Camera
         self.shutter_start = self.create_client(Empty,
                                                 "shutter_start",
                                                 callback_group=self.cb_group)
@@ -85,7 +90,7 @@ class Flight(Node):
                                           "cube",
                                           self.upload_cb)
 
-        # # State Subscriber
+        # State Subscriber
         self.pose_sub = self.create_subscription(PoseStamped,
                                                  "/cf231/pose",
                                                  self.pose_cb, 10)
@@ -100,7 +105,8 @@ class Flight(Node):
             csvFile = csv.reader(file)
             self.waypoints = list(csvFile)
 
-        self.get_logger().error(f"Successfully saved {len(self.waypoints)} points")
+        self.get_logger().error(
+            f"Successfully saved {len(self.waypoints)} points")
 
         return response
 
@@ -253,7 +259,7 @@ class Flight(Node):
             self.get_logger().error('landing')
             landReq = Land.Request()
             landReq.height = 0.3
-            landReq.duration = Duration(sec = 1)
+            landReq.duration = Duration(sec=1)
             await self.cf_land.call_async(landReq)
 
 
