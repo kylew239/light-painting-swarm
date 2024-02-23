@@ -9,7 +9,8 @@ import csv
 
 def edge_detect(img: str,
                 t1: int = 400,
-                t2: int = 500) -> List[Tuple]:
+                t2: int = 500,
+                show: bool = False) -> List[Tuple]:
     """
     Finds the pixels that represents the edges in an image,\
     using Canny Edge Detection
@@ -27,12 +28,30 @@ def edge_detect(img: str,
     """
     img = cv2.imread(img)
 
+    if show:
+        cv2.imshow("Original", img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+
     # get grayscale and blur for better edge detection
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     img = cv2.GaussianBlur(img, (3, 3), 0)
 
+    if show:
+        cv2.imshow("Grayscale and blur", img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+
     # Canny edge detection
     img = cv2.Canny(image=img, threshold1=t1, threshold2=t2)
+
+    if show:
+        cv2.imshow("Canny Edge Detection", img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
 
     # Get list of pixels represnting the edges
     idx = np.nonzero(img)
@@ -200,7 +219,7 @@ def generate_waypoints(idx_list: List[Tuple],
     return (x, y)
 
 
-idx2_list = edge_detect('cube.png')
+idx2_list = edge_detect('tree.jpg', show=True)
 
 
 xleft = 0.05
@@ -212,42 +231,42 @@ ytop = 1.3
                                 ybot,
                                 xright,
                                 ytop,
-                                0.01)
+                                0.0)
 
-# # Plotting
-# fig, ax = plt.subplots()
-# ax.set_xlim(-50, 50)
-# ax.set_ylim(-50, 50)
-# line, = ax.plot([], [], marker='o', markersize=1,
-#                 color='black', alpha=1.0, linestyle='None')
+# def generate_csv(x, z):
+#     filename = "/home/kyle/winterProject/src/uav_trajectories/build/test.csv"
+#     with open(filename, 'w') as csvfile:
+#         writer = csv.writer(csvfile)
+#         for i in range(len(x)):
+#             t = [x[i], -0.5, z[i]]
+#             writer.writerow(t)
 
-def generate_csv(x, z):
-    filename = "/home/kyle/winterProject/src/uav_trajectories/build/test.csv"
-    with open(filename, 'w') as csvfile:
-        writer = csv.writer(csvfile)
-        for i in range(len(x)):
-            t = [x[i], -0.5, z[i]]
-            writer.writerow(t)
+# print(len(arry))
+# generate_csv(arrx, arry)
 
-print(len(arry))
-generate_csv(arrx, arry)
+# Plotting
+fig, ax = plt.subplots()
+ax.set_xlim(-0.25, 1.25)
+ax.set_ylim(0, 1.5)
+line, = ax.plot([], [], marker='o', markersize=1,
+                color='black', alpha=1.0, linestyle='None')
 
 # Function to update the plot for each frame of the animation
-# def update(frame):
-#     if frame < len(arrx):
-#         x = arrx[:frame+1]
-#         y = arry[:frame+1]
-#         line.set_data(x, y)
-#         return line,
-#     else:
-#         return line,
+def update(frame):
+    if frame < len(arrx):
+        x = arrx[:frame+1]
+        y = arry[:frame+1]
+        line.set_data(x, y)
+        return line,
+    else:
+        return line,
 
 
-# # Create the animation
-# ani = FuncAnimation(fig,
-#                     update,
-#                     frames=len(arrx)+1,
-#                     blit=True,
-#                     interval=1)
+# Create the animation
+ani = FuncAnimation(fig,
+                    update,
+                    frames=len(arrx)+1,
+                    blit=True,
+                    interval=1)
 
-# plt.show()
+plt.show()
