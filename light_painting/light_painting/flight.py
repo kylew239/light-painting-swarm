@@ -45,6 +45,22 @@ class Flight(Node):
         self.gotoReq.relative = False
         self.gotoReq.duration = Duration(sec=1)
 
+        # LED bitmask requests for all LED's off
+        params_off = Parameter()
+        params_off.value.type = 2  # integer parameter
+        params_off.name = 'cf231.params.led.bitmask'
+        params_off.value.integer_value = int('0b10000000', base=0)
+        self.off_req = SetParameters.Request()
+        self.off_req.parameters = [params_off]
+
+        # Turn just the blue right LED on
+        params_blue = Parameter()
+        params_blue.value.type = 2  # integer parameter
+        params_blue.name = 'cf231.params.led.bitmask'
+        params_blue.value.integer_value = int('0b10100000', base=0)
+        self.blue_req = SetParameters.Request()
+        self.blue_req.parameters = [params_blue]
+
         # Use a singular callback group to ensure services don't hang
         self.cb_group = MutuallyExclusiveCallbackGroup()
 
@@ -113,17 +129,9 @@ class Flight(Node):
 
     async def start_callback(self, request, response):
         # Turn off all LEDs except for the blue one
-        params = Parameter()
-        params.value.type = 2 # integer parameter
-        params.value.integer_value = int('0b10100000', base=0)
-        params.name = 'cf231.params.led.bitmask'
-
-        req = SetParameters.Request()
-        req.parameters = [params]
-        await self.set_param.call_async(req)
-
+        await self.set_param.call_async(self.off_req)
         self.state = State.TAKEOFF
- 
+
         return response
 
     def pose_cb(self, msg):
@@ -137,15 +145,17 @@ class Flight(Node):
 
                 if self.prev_state == State.WAYPOINT:
                     self.state = State.WAYPOINT
-                
-                if self.prev_state == State.STOPPING:
-                    self.state = State.STOPPED
 
             # Takeoff doesn't maintain x and y distances
             # Need to calculate seperately
             if self.prev_state == State.TAKEOFF:
                 if self.current_pos.z >= 0.3:  # Takeoff Height TODO: Make into parameter
                     self.state = State.HOMING
+
+            # Approach landing doesn't care about x and y distances, only height
+            if self.prev_state == State.STOPPING:
+                if self.current_pos.z <= 0.15:
+                    self.state = State.LANDING
 
     async def timer_cb(self):
         if self.state == State.TAKEOFF:
@@ -182,6 +192,11 @@ class Flight(Node):
             await self.shutter_start.call_async(Empty.Request())
 
         if self.state == State.WAYPOINT:
+            # Blink the LEDs
+            await self.set_param.call_async(self.blue_req)
+            await self.set_param.call_async(self.off_req)
+
+            # Go to next point
             self.get_logger().info(f"Points left: {len(self.waypoints)}")
             self.state = State.FLYING
             self.prev_state = State.WAYPOINT
@@ -204,14 +219,12 @@ class Flight(Node):
                 self.state = State.STOPPING
 
         if self.state == State.STOPPING:
-            self.state = State.STOPPED
-            self.prev_state = State.CAMERA
             self.get_logger().info("stopping shutter")
             await self.shutter_stop.call_async(Empty.Request())
 
             # fly 15cm above the ground, helps with a smoother landing
-            self.gotoReq.duration = Duration(sec=3)
-            self.gotoReq.goal.z = 0.15
+            self.gotoReq.duration = Duration(sec=2)
+            self.gotoReq.goal.z = 0.1
             self.state = State.FLYING
             self.prev_state = State.STOPPING
             await self.cf_goto.call_async(self.gotoReq)
