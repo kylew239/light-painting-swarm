@@ -219,54 +219,56 @@ def generate_waypoints(idx_list: List[Tuple],
     return (x, y)
 
 
-idx2_list = edge_detect('tree.jpg', show=True)
+idx2_list = edge_detect('tree.jpg', show=False)
 
 
 xleft = 0.05
 xright = 0.95
 ybot = 0.3
-ytop = 1.3
+ytop = 1.7
 (arrx, arry) = generate_waypoints(idx2_list,
                                 xleft,
                                 ybot,
                                 xright,
                                 ytop,
-                                0.0)
+                                0.015)
 
-# def generate_csv(x, z):
-#     filename = "/home/kyle/winterProject/src/uav_trajectories/build/test.csv"
-#     with open(filename, 'w') as csvfile:
-#         writer = csv.writer(csvfile)
-#         for i in range(len(x)):
-#             t = [x[i], -0.5, z[i]]
-#             writer.writerow(t)
+def generate_csv(x, z):
+    filename = "/home/kyle/winterProject/src/uav_trajectories/build/test.csv"
+    with open(filename, 'w') as csvfile:
+        writer = csv.writer(csvfile)
+        for i in range(len(x)):
+            t = [x[i], 0.5, z[i]]
+            writer.writerow(t)
+    print(f'Saved {len(x)} waypoints')
 
 # print(len(arry))
-# generate_csv(arrx, arry)
+generate_csv(arrx, arry)
+print("done")
 
 # Plotting
-fig, ax = plt.subplots()
-ax.set_xlim(-0.25, 1.25)
-ax.set_ylim(0, 1.5)
-line, = ax.plot([], [], marker='o', markersize=1,
-                color='black', alpha=1.0, linestyle='None')
+# fig, ax = plt.subplots()
+# ax.set_xlim(-0.25, 1.25)
+# ax.set_ylim(0, 1.5)
+# line, = ax.plot([], [], marker='o', markersize=1,
+#                 color='black', alpha=1.0, linestyle='None')
 
-# Function to update the plot for each frame of the animation
-def update(frame):
-    if frame < len(arrx):
-        x = arrx[:frame+1]
-        y = arry[:frame+1]
-        line.set_data(x, y)
-        return line,
-    else:
-        return line,
+# # Function to update the plot for each frame of the animation
+# def update(frame):
+#     if frame < len(arrx):
+#         x = arrx[:frame+1]
+#         y = arry[:frame+1]
+#         line.set_data(x, y)
+#         return line,
+#     else:
+#         return line,
 
 
-# Create the animation
-ani = FuncAnimation(fig,
-                    update,
-                    frames=len(arrx)+1,
-                    blit=True,
-                    interval=1)
+# # Create the animation
+# ani = FuncAnimation(fig,
+#                     update,
+#                     frames=len(arrx)+1,
+#                     blit=True,
+#                     interval=1)
 
-plt.show()
+# plt.show()

@@ -24,7 +24,8 @@ class State(Enum):
     CAMERA = auto(),
     STOPPING = auto(),
     HOMING = auto(),
-    WAYPOINT = auto()
+    WAYPOINT = auto(),
+    LANDING = auto()
 
 
 class Flight(Node):
@@ -105,69 +106,24 @@ class Flight(Node):
             csvFile = csv.reader(file)
             self.waypoints = list(csvFile)
 
-        self.get_logger().error(
+        self.get_logger().info(
             f"Successfully saved {len(self.waypoints)} points")
 
         return response
 
     async def start_callback(self, request, response):
+        # Turn off all LEDs except for the blue one
+        params = Parameter()
+        params.value.type = 2 # integer parameter
+        params.value.integer_value = int('0b10100000', base=0)
+        params.name = 'cf231.params.led.bitmask'
+
+        req = SetParameters.Request()
+        req.parameters = [params]
+        await self.set_param.call_async(req)
+
         self.state = State.TAKEOFF
-        # emp = Empty.Request()
-
-        # test = Duration(sec = 1)
-        # # Take off
-        # takeoffReq = Takeoff.Request()
-        # takeoffReq.height = 0.5
-        # takeoffReq.duration = test
-        # self.state = State.MOVING
-        # self.get_logger().error("taking off")
-        # await self.cf_takeoff.call_async(takeoffReq)
-        # sleep(2) # check pose
-
-        # await self.shutter_start.call_async(emp)
-
-        # # flying 0,5m forward
-        # test = Duration(sec = 3)
-        # gotoReq = GoTo.Request()
-        # gotoReq.relative = True
-        # gotoReq.goal = Point(x=1.0)
-        # gotoReq.duration = test
-        # self.state = State.MOVING
-        # self.get_logger().error('flying to point 1')
-        # await self.cf_goto.call_async(gotoReq)
-        # sleep(3)
-
-        # # fly 30cm to the right
-        # gotoReq.goal = Point(x=0.0, z=0.20)
-        # self.state = State.MOVING
-        # self.get_logger().error('flying to point 2')
-        # await self.cf_goto.call_async(gotoReq)
-        # sleep(3)
-
-        # # fly 20cm back
-        # gotoReq.goal = Point(x=-1.0, y=0.0)
-        # self.state = State.MOVING
-        # self.get_logger().error('flying to point 3')
-        # await self.cf_goto.call_async(gotoReq)
-        # sleep(3)
-
-        # # fly back to start position, but 20cm higher
-        # gotoReq.goal = Point(x=0.0, z=-0.20)
-        # self.state = State.MOVING
-        # self.get_logger().error('flying to point 4')
-        # await self.cf_goto.call_async(gotoReq)
-        # sleep(3)
-
-        # await self.shutter_stop.call_async(emp)
-
-        # Land
-        # landReq = Land.Request()
-        # landReq.height = 0.5
-        # landReq.duration = test
-        # self.state = State.MOVING
-        # self.get_logger().error('landing')
-        # await self.cf_land.call_async(landReq)
-
+ 
         return response
 
     def pose_cb(self, msg):
@@ -181,9 +137,9 @@ class Flight(Node):
 
                 if self.prev_state == State.WAYPOINT:
                     self.state = State.WAYPOINT
-            # else:
-            #     # self.get_logger().error(f"Distance: {b}")
-            #     # self.get_logger().error(f"C: {self.current_pos} ||| G: {self.goal}")
+                
+                if self.prev_state == State.STOPPING:
+                    self.state = State.STOPPED
 
             # Takeoff doesn't maintain x and y distances
             # Need to calculate seperately
@@ -192,9 +148,8 @@ class Flight(Node):
                     self.state = State.HOMING
 
     async def timer_cb(self):
-        # self.get_logger().error(f"Current state: {self.state} and previous state: {self.prev_state}")
         if self.state == State.TAKEOFF:
-            self.get_logger().error("taking off")
+            self.get_logger().info("taking off")
             self.state = State.FLYING
             self.prev_state = State.TAKEOFF
 
@@ -209,7 +164,7 @@ class Flight(Node):
             self.pose_counter = 0
 
         if self.state == State.HOMING:
-            self.get_logger().error('flying to first point')
+            self.get_logger().info('flying to first point')
             self.state = State.FLYING
             self.prev_state = State.HOMING
 
@@ -219,17 +174,15 @@ class Flight(Node):
             self.pose_counter = 0
 
         if self.state == State.CAMERA:
-            self.get_logger().error("starting Camera")
             self.state = State.WAYPOINT
             self.prev_state = State.CAMERA
 
             # Start Camera
-            self.get_logger().error("starting shutter")
+            self.get_logger().info("starting shutter")
             await self.shutter_start.call_async(Empty.Request())
 
         if self.state == State.WAYPOINT:
-            self.get_logger().error("moving to next point")
-            self.get_logger().error(f"Points left: {len(self.waypoints)}")
+            self.get_logger().info(f"Points left: {len(self.waypoints)}")
             self.state = State.FLYING
             self.prev_state = State.WAYPOINT
 
@@ -253,13 +206,22 @@ class Flight(Node):
         if self.state == State.STOPPING:
             self.state = State.STOPPED
             self.prev_state = State.CAMERA
-            self.get_logger().error("stopping shutter")
+            self.get_logger().info("stopping shutter")
             await self.shutter_stop.call_async(Empty.Request())
 
-            self.get_logger().error('landing')
+            # fly 15cm above the ground, helps with a smoother landing
+            self.gotoReq.duration = Duration(sec=3)
+            self.gotoReq.goal.z = 0.15
+            self.state = State.FLYING
+            self.prev_state = State.STOPPING
+            await self.cf_goto.call_async(self.gotoReq)
+
+        if self.state == State.LANDING:
+            self.get_logger().info('landing')
             landReq = Land.Request()
             landReq.height = 0.3
             landReq.duration = Duration(sec=1)
+            self.state = State.STOPPED
             await self.cf_land.call_async(landReq)
 
 
