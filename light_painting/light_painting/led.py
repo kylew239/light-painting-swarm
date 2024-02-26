@@ -12,8 +12,7 @@ import math
 
 
 class State(Enum):
-    """Determine the states of the drone."""
-
+    """Record the state of the LED."""
     ON = auto(),
     OFF = auto(),
 
@@ -168,6 +167,17 @@ def main(args=None):
 
 
 def calc_vector(p1: Point, p2: Point) -> Vector3:
+    """
+    Calculates the vector between two points.
+
+    Args:
+        p1 (geometry_msgs/Point): The head of the vector
+        p2 (geometry_msgs/Point): The tail of the vector
+
+    Returns
+    -------
+        Vector3: A geometery_msgs/Vector3 bewteen the two points
+    """
     return Vector3(
         x=p1.x - p2.x,
         y=p1.y - p2.y,
@@ -176,4 +186,14 @@ def calc_vector(p1: Point, p2: Point) -> Vector3:
 
 
 def get_mag(v: Vector3) -> float:
+    """
+    Calculates the magnitude of a vector
+
+    Args:
+        v (geometry_msgs/Vector3): The vector
+
+    Returns
+    -------
+        float: The magnitude
+    """
     return math.sqrt(v.x**2 + v.y**2 + v.z**2)

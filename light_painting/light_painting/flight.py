@@ -12,8 +12,6 @@ from rcl_interfaces.msg import Parameter
 
 import csv
 import math
-from time import sleep
-
 
 class State(Enum):
     """Determine the states of the drone."""
@@ -252,6 +250,21 @@ def close(p1: Point,
           p2: Point,
           threshold: float = 0.015,
           absolute: bool = False) -> bool:
+    """
+    Determines if two points are close
+
+    Args:
+        p1 (geometry_msgs/Point): The first point
+        p2 (geometry_msgs/Point): The second point
+        threshold (float, optional): The distance to be considered close.\
+            Defaults to 0.015.
+        absolute (bool, optional): Whether or no to use absolute distance.\
+            Defaults to False.
+
+    Returns
+    -------
+        bool: If the two points are close
+    """
     dx = abs(p1.x-p2.x)
     dy = abs(p1.y-p2.y)
     dz = abs(p1.z-p2.z)
