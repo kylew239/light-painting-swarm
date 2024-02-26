@@ -111,6 +111,11 @@ class Flight(Node):
         self.pose_sub = self.create_subscription(PoseStamped,
                                                  "/cf231/pose",
                                                  self.pose_cb, 10)
+        
+        # Publishers
+        self.waypoint_pub = self.create_publisher(Point,
+                                                  "waypoint",
+                                                  10)
 
         # Timer
         self.timer = self.create_timer(1.0/10.0, self.timer_cb)
@@ -171,7 +176,6 @@ class Flight(Node):
             self.goal.z = self.goal.z + 0.3
 
             await self.cf_takeoff.call_async(takeoffReq)
-            self.pose_counter = 0
 
         if self.state == State.HOMING:
             self.get_logger().info('flying to first point')
@@ -181,7 +185,6 @@ class Flight(Node):
             # Fly to goal
             self.gotoReq.goal = self.goal
             await self.cf_goto.call_async(self.gotoReq)
-            self.pose_counter = 0
 
         if self.state == State.CAMERA:
             self.state = State.WAYPOINT
@@ -193,8 +196,8 @@ class Flight(Node):
 
         if self.state == State.WAYPOINT:
             # Blink the LEDs
-            await self.set_param.call_async(self.blue_req)
-            await self.set_param.call_async(self.off_req)
+            # await self.set_param.call_async(self.blue_req)
+            # await self.set_param.call_async(self.off_req)
 
             # Go to next point
             self.get_logger().info(f"Points left: {len(self.waypoints)}")
@@ -210,9 +213,9 @@ class Flight(Node):
                     z=float(point[2])
                 )
 
+                self.waypoint_pub.publish(self.goal)
                 self.gotoReq.goal = self.goal
                 await self.cf_goto.call_async(self.gotoReq)
-                self.pose_counter = 0
 
             # No waypoints left, stopping
             else:
