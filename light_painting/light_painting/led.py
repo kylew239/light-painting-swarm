@@ -3,11 +3,19 @@ from rclpy.node import Node
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
 from std_srvs.srv import Empty
-from geometry_msgs.msg import Point, PoseStamped
+from geometry_msgs.msg import Point, PoseStamped, Vector3
 from rcl_interfaces.srv import SetParameters
 from rcl_interfaces.msg import Parameter, ParameterDescriptor
 
+from enum import Enum, auto
 import math
+
+
+class State(Enum):
+    """Determine the states of the drone."""
+
+    ON = auto(),
+    OFF = auto(),
 
 
 class LED(Node):
@@ -16,7 +24,7 @@ class LED(Node):
         super().__init__("LED")
         self.declare_parameter("control", "radius", ParameterDescriptor(
             description="Type of controller for the LEDs (radius | line)"))
-        self.declare_parameter("threshold", 0.03, ParameterDescriptor(
+        self.declare_parameter("threshold", 0.05, ParameterDescriptor(
             descrition="Threshold distance for turning the LED off"))
 
         self.control = self.get_parameter(
@@ -25,6 +33,10 @@ class LED(Node):
             "threshold").get_parameter_value().double_value
 
         self.waypoint = Point()
+        self.prev_waypoint = Point()
+        self.line = Vector3()
+        self.toggle = False
+        self.state = State.OFF
 
         # LED bitmask requests for all LED's off
         params_off = Parameter()
@@ -50,6 +62,11 @@ class LED(Node):
                                             "/crazyflie_server/set_parameters",
                                             callback_group=self.cb_group)
 
+        # Service Server
+        self.toggle = self.create_service(Empty,
+                                          "toggle_led",
+                                          self.toggle_cb)
+
         # Subscribers
         self.waypoint_sub = self.create_subscription(Point,
                                                      "waypoint",
@@ -69,26 +86,78 @@ class LED(Node):
             self.get_logger().error("Control type invalid")
             raise NameError
 
+    def toggle_cb(self, request, response):
+        self.toggle = not self.toggle
+        return response
+
     def waypoint_cb(self, msg):
+        # for line
+        # update direction line
+        self.line = calc_vector(msg, self.waypoint)
+        mag = get_mag(self.line)
+
+        # Normalize line vector
+        self.line = Vector3(
+            x=self.line.x / mag,
+            y=self.line.y / mag,
+            z=self.line.z / mag
+        )
+
+        # update waypoint storage
+        self.prev_waypoint = self.waypoint
         self.waypoint = msg
 
-    def radius_cb(self, msg):
+    async def radius_cb(self, msg):
         current_pos = msg.pose.position
         dx = abs(current_pos.x-self.waypoint.x)
         dy = abs(current_pos.y-self.waypoint.y)
         dz = abs(current_pos.z-self.waypoint.z)
 
-        if math.sqrt(dx**2 + dy**2 + dz**2) <= self.threshold:
-            # turn LED on if close
-            self.set_param(self.blue_req)
-        else:
-            # else turn off
-            self.set_param(self.off_req)
+        if self.toggle:
+            if (math.sqrt(dx**2 + dy**2 + dz**2) <= self.threshold) and (self.state == State.OFF):
+                # turn LED on if close
+                # Also check to make sure it was previously off
+                await self.set_param.call_async(self.blue_req)
+                self.state = State.ON
+            elif self.state == State.ON:
+                # else turn off
+                await self.set_param.call_async(self.off_req)
+                self.state = State.OFF
 
-    def line_cb(self, msg):
+    async def line_cb(self, msg):
         current_pos = msg.pose.position
 
-        pass
+        # prev_goal to current point vector
+        vec_to_curr = calc_vector(current_pos, self.prev_waypoint)
+
+        # dot product
+        dot = self.line.x * vec_to_curr.x + self.line.y * \
+            vec_to_curr.y + self.line.z * vec_to_curr.z
+
+        # project the current point vector onto line vector
+        proj = Vector3(
+            x=self.line.x * dot,
+            y=self.line.y * dot,
+            z=self.line.z * dot
+        )
+
+        # distance from line to point
+        dist_vec = Vector3(
+            x=vec_to_curr.x - proj.x,
+            y=vec_to_curr.y - proj.y,
+            z=vec_to_curr.z - proj.z
+        )
+
+        if self.toggle:
+            if (get_mag(dist_vec) < self.threshold) and (self.state == State.OFF):
+                # if distance to line is close enough, turn the LED on
+                # Also check to make sure it was previously off
+                await self.set_param.call_async(self.blue_req)
+                self.state = State.ON
+            elif self.state == State.ON:
+                # else turn the LED off
+                await self.set_param.call_async(self.off_req)
+                self.state = State.OFF
 
 
 def main(args=None):
@@ -96,3 +165,15 @@ def main(args=None):
     led = LED()
     rclpy.spin(led)
     rclpy.shutdown()
+
+
+def calc_vector(p1: Point, p2: Point) -> Vector3:
+    return Vector3(
+        x=p1.x - p2.x,
+        y=p1.y - p2.y,
+        z=p1.z - p2.z
+    )
+
+
+def get_mag(v: Vector3) -> float:
+    return math.sqrt(v.x**2 + v.y**2 + v.z**2)

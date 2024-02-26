@@ -23,6 +23,7 @@ setup(
     entry_points={
         'console_scripts': [
             'flight = light_painting.flight:main',
+            'led = light_painting.led:main',
         ],
     },
 )

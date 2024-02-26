@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, Shutdown, SetLaunchConfiguration
+from launch.actions import DeclareLaunchArgument, Shutdown, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.substitutions import TextSubstitution
 from launch.substitutions import LaunchConfiguration, Command
@@ -27,8 +27,13 @@ def generate_launch_description():
         #                                       'config',
         #                                       'config.yaml'])),
 
-        
-
+        DeclareLaunchArgument('led_control',
+                              default_value="radius",
+                              description="Determines the LED controller mode" +
+                              "(radius | line)"),
+        DeclareLaunchArgument('threshold',
+                              default_value="0.05",
+                              description="The threshold for the LED controller to use"),
 
         # Nodes
         Node(
@@ -47,6 +52,21 @@ def generate_launch_description():
             on_exit=Shutdown(),
         ),
 
-        #TODO: Include camera launch descritpion
+        Node(
+            package='light_painting',
+            executable='led',
+            name='led',
+            on_exit=Shutdown(),
+            arguments=['control', LaunchConfiguration('led_control'),
+                       'threshold', LaunchConfiguration('threshold')],
+        ),
+
+        IncludeLaunchDescription(
+            PathJoinSubstitution([
+                FindPackageShare("camera"),
+                "launch",
+                "camera.launch.py"
+            ]),
+        ),
 
 ])
