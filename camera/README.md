@@ -30,3 +30,4 @@ This package was created as a part of this project to help control the camera.
 
 # Electrical Setup
 On the Sony a6400, the shutter is controlled by shorting the tip, ring, and sleeve on the 2.5mm adapter. A simple way to control this is by connecting the sleeve to ground, and both the tip and sleeve to a digital IO port. When the IO port is pulled low, the shutter starts. When the IO port is pulled high, the shutter is released.
+![Schematic](docs/camera_schematic.png)

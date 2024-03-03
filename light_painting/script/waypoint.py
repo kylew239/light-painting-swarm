@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from typing import List, Tuple
 import math
-import csv
 
 
 def edge_detect(img: str,
@@ -218,17 +217,6 @@ def generate_waypoints(idx_list: List[Tuple],
 
     return (x, y)
 
-
-def generate_csv(x, z):
-    filename = "/home/kyle/winterProject/src/uav_trajectories/build/test.csv"
-    with open(filename, 'w') as csvfile:
-        writer = csv.writer(csvfile)
-        for i in range(len(x)):
-            t = [x[i], 0.5, z[i]]
-            writer.writerow(t)
-    print(f'Saved {len(x)} waypoints')
-
-
 if __name__ == "__main__":
     idx2_list = edge_detect('tree.jpg', show=True)
     xleft = 0.05
@@ -241,11 +229,9 @@ if __name__ == "__main__":
                                     xright,
                                     ytop,
                                     0.015)
-    # print(len(arry))
-    generate_csv(arrx, arry)
-    print("done")
 
-    # yPlotting
+
+    # Plotting
     fig, ax = plt.subplots()
     ax.set_xlim(-0.25, 1.25)
     ax.set_ylim(0, 1.5)
