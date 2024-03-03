@@ -1,6 +1,6 @@
 # This file was taken from Crazyswarm2/crazyflie/config and has been modified
 robots:
-  cf231:
+  cfblue:
     enabled: true
     uri: radio://0/80/2M/E7E7E7E7E7
     initial_position: [0, 0, 0]

@@ -15,7 +15,7 @@ This project utilizes mutliple ROS nodes interfacing with the various hardware a
 3. Build using `colcon build` while in the workspace
 
 ## For light painting with one drone
-1. Run `ros2 launch light_painting light_paint.launch.py`
+1. Run `ros2 launch light_painting light_paint_one.launch.py`
 2. In a seperate terminal, run `ros2 service call /generate_waypoint light_painting_interfaces/srv/Generate '{filename: <insert file>}'`
     * Be sure to replace `<insert file>` with the full path to your file
 3. After getting the service call response, run `ros2 service call /start std_srvs/srv/Empty`
