@@ -1,0 +1,17 @@
+repositories:
+  crazyswarm2:
+    type: git
+    url: https://github.com/IMRCLab/crazyswarm2
+    version: main
+  light-painting-swarm:
+    type: git
+    url: git@github.com:kylew239/light-painting-swarm.git
+    version: main
+  motion_capture_tracking:
+    type: git
+    url: https://github.com/IMRCLab/motion_capture_tracking.git
+    version: ros2
+  uav_trajectories:
+    type: git
+    url: https://github.com/whoenig/uav_trajectories.git
+    version: main
