@@ -8,10 +8,11 @@ from std_srvs.srv import Empty
 from builtin_interfaces.msg import Duration
 from geometry_msgs.msg import Point, PoseStamped
 from rcl_interfaces.srv import SetParameters
-from rcl_interfaces.msg import Parameter
+from rcl_interfaces.msg import Parameter, ParameterDescriptor
+from light_painting_interfaces.srv import Waypoints
 
-import csv
 import math
+
 
 class State(Enum):
     """Determine the states of the drone."""
@@ -34,30 +35,34 @@ class Flight(Node):
         self.prev_state = State.STOPPED
         self.state = State.STOPPED
         self.waypoints = []
+        self.yaw = []
         self.next_pos = Point()
         self.goal = Point()
         self.current_pos = Point()
 
+        self.declare_parameter("takeoff_height", 0.30,
+                               ParameterDescriptor(description="Initial takeoff height"))
+        self.declare_parameter("drone", "cf231", ParameterDescriptor(
+            description="Name of the drone (ex: cf231)"))
+
+        self.takeoff_height = self.get_parameter(
+            "takeoff_height").get_parameter_value().double_value
+        self.drone = self.get_parameter(
+            "drone").get_parameter_value().string_value
+
         # Goto request
         self.gotoReq = GoTo.Request()
         self.gotoReq.relative = False
-        self.gotoReq.duration = Duration(sec=1)
+        self.gotoReq.duration = Duration(nanosec=500000000)
+        # self.gotoReq.duration = Duration(sec=1)
 
         # LED bitmask requests for all LED's off
         params_off = Parameter()
         params_off.value.type = 2  # integer parameter
-        params_off.name = 'cf231.params.led.bitmask'
+        params_off.name = self.drone + '.params.led.bitmask'
         params_off.value.integer_value = int('0b10000000', base=0)
         self.off_req = SetParameters.Request()
         self.off_req.parameters = [params_off]
-
-        # Turn just the blue right LED on
-        params_blue = Parameter()
-        params_blue.value.type = 2  # integer parameter
-        params_blue.name = 'cf231.params.led.bitmask'
-        params_blue.value.integer_value = int('0b10100000', base=0)
-        self.blue_req = SetParameters.Request()
-        self.blue_req.parameters = [params_blue]
 
         # Use a singular callback group to ensure services don't hang
         self.cb_group = MutuallyExclusiveCallbackGroup()
@@ -65,21 +70,21 @@ class Flight(Node):
         # Service clients
         # Crazyflie Server
         self.cf_takeoff = self.create_client(Takeoff,
-                                             "/cf231/takeoff",
+                                             self.drone + "/takeoff",
                                              callback_group=self.cb_group)
         self.cf_land = self.create_client(Land,
-                                          "/cf231/land",
+                                          self.drone + "/land",
                                           callback_group=self.cb_group)
         self.cf_goto = self.create_client(GoTo,
-                                          "/cf231/go_to",
+                                          self.drone + "/go_to",
                                           callback_group=self.cb_group)
 
         self.upload_trajectory = self.create_client(UploadTrajectory,
-                                                    "/cf231/upload_trajectory",
+                                                    self.drone + "/upload_trajectory",
                                                     callback_group=self.cb_group)
 
         self.traj = self.create_client(StartTrajectory,
-                                       "/cf231/start_trajectory",
+                                       self.drone + "/start_trajectory",
                                        callback_group=self.cb_group)
 
         self.set_param = self.create_client(SetParameters,
@@ -88,42 +93,39 @@ class Flight(Node):
 
         # Camera
         self.shutter_start = self.create_client(Empty,
-                                                "shutter_start",
+                                                "/shutter_start",
                                                 callback_group=self.cb_group)
 
         self.shutter_stop = self.create_client(Empty,
-                                               "shutter_stop",
+                                               "/shutter_stop",
                                                callback_group=self.cb_group)
 
         # Service Servers
         self.start = self.create_service(Empty,
-                                         "start",
+                                         "/start",
                                          self.start_callback)
 
-        # TODO:
-        self.upload = self.create_service(Empty,
-                                          "cube",
+        self.upload = self.create_service(Waypoints,
+                                          self.drone + "/upload",
                                           self.upload_cb)
 
         # State Subscriber
         self.pose_sub = self.create_subscription(PoseStamped,
-                                                 "/cf231/pose",
+                                                 self.drone + "/pose",
                                                  self.pose_cb, 10)
-        
+
         # Publishers
         self.waypoint_pub = self.create_publisher(Point,
-                                                  "waypoint",
+                                                  self.drone + "/waypoint",
                                                   10)
 
         # Timer
         self.timer = self.create_timer(1.0/10.0, self.timer_cb)
 
     def upload_cb(self, request, response):
-        # Read csv and get data
-        filename = "/home/kyle/winterProject/src/uav_trajectories/build/test.csv"
-        with open(filename, mode='r') as file:
-            csvFile = csv.reader(file)
-            self.waypoints = list(csvFile)
+        """Upload a list of waypoints."""
+        self.waypoints = request.point
+        self.yaw = request.yaw
 
         self.get_logger().info(
             f"Successfully saved {len(self.waypoints)} points")
@@ -131,6 +133,7 @@ class Flight(Node):
         return response
 
     async def start_callback(self, request, response):
+        """Start the state machine for the drone."""
         # Turn off all LEDs except for the blue one
         await self.set_param.call_async(self.off_req)
         self.state = State.TAKEOFF
@@ -138,6 +141,7 @@ class Flight(Node):
         return response
 
     def pose_cb(self, msg):
+        """Manages the state machine of the drone via poses."""
         self.current_pos = msg.pose.position
         # Check if crazyflie should be moving
         if self.state == State.FLYING:
@@ -152,7 +156,7 @@ class Flight(Node):
             # Takeoff doesn't maintain x and y distances
             # Need to calculate seperately
             if self.prev_state == State.TAKEOFF:
-                if self.current_pos.z >= 0.3:  # Takeoff Height TODO: Make into parameter
+                if self.current_pos.z >= self.takeoff_height:
                     self.state = State.HOMING
 
             # Approach landing doesn't care about x and y distances, only height
@@ -161,17 +165,18 @@ class Flight(Node):
                     self.state = State.LANDING
 
     async def timer_cb(self):
+        """State machine for the drone."""
         if self.state == State.TAKEOFF:
             self.get_logger().info("taking off")
             self.state = State.FLYING
             self.prev_state = State.TAKEOFF
 
             takeoffReq = Takeoff.Request()
-            takeoffReq.height = 0.3
+            takeoffReq.height = self.takeoff_height
             takeoffReq.duration = Duration(sec=1)
 
             self.goal = self.current_pos
-            self.goal.z = self.goal.z + 0.3
+            self.goal.z = self.goal.z + self.takeoff_height
 
             await self.cf_takeoff.call_async(takeoffReq)
 
@@ -193,10 +198,6 @@ class Flight(Node):
             await self.shutter_start.call_async(Empty.Request())
 
         if self.state == State.WAYPOINT:
-            # Blink the LEDs
-            # await self.set_param.call_async(self.blue_req)
-            # await self.set_param.call_async(self.off_req)
-
             # Go to next point
             self.get_logger().info(f"Points left: {len(self.waypoints)}")
             self.state = State.FLYING
@@ -204,12 +205,9 @@ class Flight(Node):
 
             # If there are waypoints left, continue navigating
             if len(self.waypoints) > 0:
-                point = self.waypoints.pop(0)
-                self.goal = Point(
-                    x=float(point[0]),
-                    y=float(point[1]),
-                    z=float(point[2])
-                )
+                # point = self.waypoints.pop(0)
+                # self.goal = point
+                self.goal = self.waypoints.pop(0)
 
                 self.waypoint_pub.publish(self.goal)
                 self.gotoReq.goal = self.goal
@@ -233,7 +231,7 @@ class Flight(Node):
         if self.state == State.LANDING:
             self.get_logger().info('landing')
             landReq = Land.Request()
-            landReq.height = 0.3
+            landReq.height = self.takeoff_height
             landReq.duration = Duration(sec=1)
             self.state = State.STOPPED
             await self.cf_land.call_async(landReq)

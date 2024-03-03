@@ -50,8 +50,6 @@ class Camera(Node):
                                                 "shutter_stop",
                                                 self.stop_cb,
                                                 callback_group=ReentrantCallbackGroup())
-        
-        self.get_logger().info("Camera node started")
 
     async def start_cb(self, request, response):
         """Start the Camera shutter."""

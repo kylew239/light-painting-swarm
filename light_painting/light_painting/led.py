@@ -25,11 +25,15 @@ class LED(Node):
             description="Type of controller for the LEDs (radius | line)"))
         self.declare_parameter("threshold", 0.05, ParameterDescriptor(
             descrition="Threshold distance for turning the LED off"))
+        self.declare_parameter("drone", "cf231", ParameterDescriptor(
+            description="Name of the drone (ex: cf231)"))
 
         self.control = self.get_parameter(
             "control").get_parameter_value().string_value
         self.threshold = self.get_parameter(
             "threshold").get_parameter_value().double_value
+        self.drone = self.get_parameter(
+            "drone").get_parameter_value().string_value
 
         self.waypoint = Point()
         self.prev_waypoint = Point()
@@ -40,7 +44,7 @@ class LED(Node):
         # LED bitmask requests for all LED's off
         params_off = Parameter()
         params_off.value.type = 2  # integer parameter
-        params_off.name = 'cf231.params.led.bitmask'
+        params_off.name = self.drone + '.params.led.bitmask'
         params_off.value.integer_value = int('0b10000000', base=0)
         self.off_req = SetParameters.Request()
         self.off_req.parameters = [params_off]
@@ -48,7 +52,7 @@ class LED(Node):
         # Turn just the blue right LED on
         params_blue = Parameter()
         params_blue.value.type = 2  # integer parameter
-        params_blue.name = 'cf231.params.led.bitmask'
+        params_blue.name = self.drone + '.params.led.bitmask'
         params_blue.value.integer_value = int('0b10100000', base=0)
         self.blue_req = SetParameters.Request()
         self.blue_req.parameters = [params_blue]
@@ -68,28 +72,31 @@ class LED(Node):
 
         # Subscribers
         self.waypoint_sub = self.create_subscription(Point,
-                                                     "waypoint",
+                                                     self.drone + "/waypoint",
                                                      self.waypoint_cb,
                                                      10)
 
         # State Subscriber changes depending on the control mode
         if (self.control == "radius"):
             self.pose_sub = self.create_subscription(PoseStamped,
-                                                     "/cf231/pose",
+                                                     self.drone + "/pose",
                                                      self.radius_cb, 10)
         elif (self.control == "line"):
             self.pose_sub = self.create_subscription(PoseStamped,
-                                                     "/cf231/pose",
+                                                     self.drone + "/pose",
                                                      self.line_cb, 10)
         else:
             self.get_logger().error("Control type invalid")
             raise NameError
 
     def toggle_cb(self, request, response):
+        """Toggles the LED Controller."""
+        self.get_logger().error("TOGGLE WAS CALLED")
         self.toggle = not self.toggle
         return response
 
     def waypoint_cb(self, msg):
+        """Updates waypoints of the drone."""
         # for line
         # update direction line
         self.line = calc_vector(msg, self.waypoint)
@@ -107,6 +114,7 @@ class LED(Node):
         self.waypoint = msg
 
     async def radius_cb(self, msg):
+        """Determines if the LED of the drone is on, based on the distance to the waypoint."""
         current_pos = msg.pose.position
         dx = abs(current_pos.x-self.waypoint.x)
         dy = abs(current_pos.y-self.waypoint.y)
@@ -124,6 +132,10 @@ class LED(Node):
                 self.state = State.OFF
 
     async def line_cb(self, msg):
+        """
+        Determines if the LED of the drone is on by checking if the drone is on a line
+        bewteen two points.
+        """
         current_pos = msg.pose.position
 
         # prev_goal to current point vector
@@ -187,7 +199,7 @@ def calc_vector(p1: Point, p2: Point) -> Vector3:
 
 def get_mag(v: Vector3) -> float:
     """
-    Calculates the magnitude of a vector
+    Calculates the magnitude of a vector.
 
     Args:
         v (geometry_msgs/Vector3): The vector
@@ -196,4 +208,7 @@ def get_mag(v: Vector3) -> float:
     -------
         float: The magnitude
     """
-    return math.sqrt(v.x**2 + v.y**2 + v.z**2)
+    mag = math.sqrt(v.x**2 + v.y**2 + v.z**2)
+    if (mag == 0):
+        return 1
+    return mag

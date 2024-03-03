@@ -1,10 +1,95 @@
+import rclpy
+from rclpy.node import Node
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+
+from geometry_msgs.msg import Point
+from rcl_interfaces.msg import ParameterDescriptor
+from light_painting_interfaces.srv import Waypoints, Generate
+
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 from typing import List, Tuple
 import math
-import csv
+
+
+class Waypoint(Node):
+    def __init__(self):
+        super().__init__("waypoint")
+        self.declare_parameter("drone", "cf231", ParameterDescriptor(
+            description="Name of the drone. Same as the namespace (ex: cf231)"))
+        self.declare_parameter("left_bound", 0.05, ParameterDescriptor(
+            description="Left of the bounding-box for the waypoints"))
+        self.declare_parameter("right_bound", 0.95, ParameterDescriptor(
+            description="Right of the bounding-box for the waypoints"))
+        self.declare_parameter("bot_bound", 0.30, ParameterDescriptor(
+            description="Bottom of the bounding-box for the waypoints"))
+        self.declare_parameter("top_bound", 1.7, ParameterDescriptor(
+            description="Top of the bounding-box for the waypoints"))
+        self.declare_parameter("resolution", 0.015, ParameterDescriptor(
+            description="Resolution for the waypoint generation"))
+        self.declare_parameter("y_offset", 0.25, ParameterDescriptor(
+            description="Y-axis offset for flying the waypoints"))
+
+        self.drone = self.get_parameter(
+            "drone").get_parameter_value().string_value
+        self.left = self.get_parameter(
+            "left_bound").get_parameter_value().double_value
+        self.right = self.get_parameter(
+            "right_bound").get_parameter_value().double_value
+        self.top = self.get_parameter(
+            "top_bound").get_parameter_value().double_value
+        self.bot = self.get_parameter(
+            "bot_bound").get_parameter_value().double_value
+        self.res = self.get_parameter(
+            "resolution").get_parameter_value().double_value
+        self.y_offset = self.get_parameter(
+            "y_offset").get_parameter_value().double_value
+
+        # Use a singular callback group to ensure services don't hang
+        self.cb_group = MutuallyExclusiveCallbackGroup()
+
+        # Service clients
+        self.upload_waypoints = self.create_client(Waypoints,
+                                                   self.drone + "/upload",
+                                                   callback_group=self.cb_group)
+
+        # Service Server
+        self.toggle = self.create_service(Generate,
+                                          "generate_waypoint",
+                                          self.waypoint_cb)
+
+    async def waypoint_cb(self, request, response):
+        """Generates the waypoints to fly through."""
+        filename = request.filename
+
+        # Generate waypoints
+        points_detected = edge_detect(filename)  # working
+        (arrx, arry) = generate_waypoints(points_detected,
+                                          self.left,
+                                          self.bot,
+                                          self.right,
+                                          self.top,
+                                          self.res)
+
+        self.get_logger().info(f"Finished generating {len(arrx)} waypoints")
+
+        # Generate waypoint upload request
+        waypoint_req = Waypoints.Request()
+        for i in range(len(arrx)):
+            waypoint_req.point.append(Point(x=arrx[i],
+                                            y=self.y_offset,
+                                            z=arry[i]))
+            waypoint_req.yaw.append(0)
+        await self.upload_waypoints.call_async(waypoint_req)
+
+        return response
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    waypoint = Waypoint()
+    rclpy.spin(waypoint)
+    rclpy.shutdown()
 
 
 def edge_detect(img: str,
@@ -33,7 +118,6 @@ def edge_detect(img: str,
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-
     # get grayscale and blur for better edge detection
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     img = cv2.GaussianBlur(img, (3, 3), 0)
@@ -43,7 +127,6 @@ def edge_detect(img: str,
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-
     # Canny edge detection
     img = cv2.Canny(image=img, threshold1=t1, threshold2=t2)
 
@@ -51,7 +134,6 @@ def edge_detect(img: str,
         cv2.imshow("Canny Edge Detection", img)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
-
 
     # Get list of pixels represnting the edges
     idx = np.nonzero(img)
@@ -115,7 +197,7 @@ def generate_waypoints(idx_list: List[Tuple],
                        resolution: float,
                        uniform_scale: bool = True) -> (List[float], List[float]):
     """
-    Generate a list of waypoints
+    Generate a list of waypoints.
 
     Args:
         idx_list (List(Tuple)): A list of points generated by edge detection and np.nonzero.\
@@ -210,64 +292,10 @@ def generate_waypoints(idx_list: List[Tuple],
     y = []
 
     for i in range(len(sortedx)-1):
-        if(dist((currx, curry), (sortedx[i], sortedy[i])) > resolution):
+        if (dist((currx, curry), (sortedx[i], sortedy[i])) > resolution):
             currx = sortedx[i]
             curry = sortedy[i]
             x.append(currx)
             y.append(curry)
 
     return (x, y)
-
-
-def generate_csv(x, z):
-    filename = "/home/kyle/winterProject/src/uav_trajectories/build/test.csv"
-    with open(filename, 'w') as csvfile:
-        writer = csv.writer(csvfile)
-        for i in range(len(x)):
-            t = [x[i], 0.5, z[i]]
-            writer.writerow(t)
-    print(f'Saved {len(x)} waypoints')
-
-
-if __name__ == "__main__":
-    idx2_list = edge_detect('tree.jpg', show=True)
-    xleft = 0.05
-    xright = 0.95
-    ybot = 0.3
-    ytop = 1.7
-    (arrx, arry) = generate_waypoints(idx2_list,
-                                    xleft,
-                                    ybot,
-                                    xright,
-                                    ytop,
-                                    0.015)
-    # print(len(arry))
-    generate_csv(arrx, arry)
-    print("done")
-
-    # yPlotting
-    fig, ax = plt.subplots()
-    ax.set_xlim(-0.25, 1.25)
-    ax.set_ylim(0, 1.5)
-    line, = ax.plot([], [], marker='o', markersize=1,
-                    color='black', alpha=1.0, linestyle='None')
-
-    # Function to update the plot for each frame of the animation
-    def update(frame):
-        if frame < len(arrx):
-            x = arrx[:frame+1]
-            y = arry[:frame+1]
-            line.set_data(x, y)
-            return line,
-        else:
-            return line,
-
-
-    # Create the animation
-    ani = FuncAnimation(fig,
-                        update,
-                        frames=len(arrx)+1,
-                        blit=True,
-                        interval=1)
-
-    plt.show()

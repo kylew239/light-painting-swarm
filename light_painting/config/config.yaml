@@ -12,15 +12,8 @@ robots:
     firmware_logging:
       enabled: true
       default_topics:
-        odom:
+        pose:
           frequency: 10 # Hz
-        scan:
-          frequency: 10 # Hz
-  cf5:
-    enabled: false
-    uri: radio://0/80/2M/E7E7E7E705
-    initial_position: [0, -0.5, 0]
-    type: cf21  # see robot_types
 
 # Definition of the various robot types
 robot_types:
@@ -33,7 +26,7 @@ robot_types:
     big_quad: false
     battery:
       voltage_warning: 3.8  # V
-      voltage_critical: 3.7 # V
+      voltage_critical: 3.3 # V
     # firmware_params:
     #   kalman:
     #     pNAcc_xy: 1.0 # default 0.5
@@ -70,19 +63,8 @@ all:
     enabled: true
     default_topics:
      # remove to disable default topic
-      odom:
-        frequency: 10
-      scan:
-        frequency: 10
       pose:
         frequency: 10 # Hz
-    #custom_topics:
-    #  topic_name1:
-    #    frequency: 10 # Hz
-    #    vars: ["stateEstimateZ.x", "stateEstimateZ.y", "stateEstimateZ.z", "pm.vbat"]
-    #  topic_name2:
-    #    frequency: 1 # Hz
-    #    vars: ["stabilizer.roll", "stabilizer.pitch", "stabilizer.yaw"]
   # firmware parameters for all drones (use robot_types/type_name to set per type, or
   # robots/drone_name to set per drone)
   firmware_params:

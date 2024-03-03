@@ -1,11 +1,9 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, Shutdown, IncludeLaunchDescription
-from launch.conditions import IfCondition
-from launch.substitutions import TextSubstitution
-from launch.substitutions import LaunchConfiguration, Command
+from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
-from launch_ros.substitutions import FindPackageShare, ExecutableInPackage
+from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import get_package_share_directory
 import os, yaml
 
@@ -49,6 +47,7 @@ def generate_launch_description():
             package='light_painting',
             executable='flight',
             name='flight',
+            arguments=['drone', 'cf231'],
             on_exit=Shutdown(),
         ),
 
@@ -58,7 +57,15 @@ def generate_launch_description():
             name='led',
             on_exit=Shutdown(),
             arguments=['control', LaunchConfiguration('led_control'),
-                       'threshold', LaunchConfiguration('threshold')],
+                       'threshold', LaunchConfiguration('threshold'),
+                       'drone', 'cf231'],
+        ),
+        
+        Node(package='light_painting',
+            executable='waypoint',
+            name='waypoint',
+            on_exit=Shutdown(),
+            arguments=['drone', 'cf231'],
         ),
 
         IncludeLaunchDescription(
@@ -68,5 +75,6 @@ def generate_launch_description():
                 "camera.launch.py"
             ]),
         ),
+
 
 ])
