@@ -21,6 +21,6 @@ This project utilizes mutliple ROS nodes interfacing with the various hardware a
 3. After getting the service call response, run `ros2 service call /start std_srvs/srv/Empty`
 
 # ROS Packages
-- `camera`: A package for controlling the shutter on the DSLR Camera. Tested on the Sony a6400
+- `camera`: A package for controlling the shutter on the DSLR Camera
 - `light_painting`: A package for controlling the drone and it's onboard LEDs
 - `light_painting_interfaces`: A package for custom interfaces used
