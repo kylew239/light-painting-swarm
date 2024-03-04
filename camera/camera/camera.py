@@ -36,6 +36,9 @@ class Camera(Node):
         self.pin = self.get_parameter(
             "arduino_pin").get_parameter_value().integer_value
 
+        # counter used to keep track of multiple triggers
+        self.count = 0
+
         # Arduino board setup
         self.board = Arduino(self.port)
         self.board.digital[self.pin].write(1)
@@ -54,11 +57,17 @@ class Camera(Node):
     async def start_cb(self, request, response):
         """Start the Camera shutter."""
         self.board.digital[self.pin].write(0)
+        self.count += 1
         return response
 
     async def stop_cb(self, request, response):
         """Stop the Camera shutter."""
-        self.board.digital[self.pin].write(1)
+        self.count -= 1
+
+        # Only stop the shutter once all the stop_shutters have been called
+        if self.count <= 0:
+            self.board.digital[self.pin].write(1)
+
         return response
 
 

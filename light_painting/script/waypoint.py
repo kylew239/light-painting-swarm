@@ -233,8 +233,8 @@ if __name__ == "__main__":
 
     # Plotting
     fig, ax = plt.subplots()
-    ax.set_xlim(-0.25, 1.25)
-    ax.set_ylim(0, 1.5)
+    ax.set_xlim(-0.5, 1.5)
+    ax.set_ylim(0, 2.0)
     line, = ax.plot([], [], marker='o', markersize=1,
                     color='black', alpha=1.0, linestyle='None')
 

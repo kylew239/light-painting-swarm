@@ -44,11 +44,15 @@ class Flight(Node):
                                ParameterDescriptor(description="Initial takeoff height"))
         self.declare_parameter("drone", "cf231", ParameterDescriptor(
             description="Name of the drone (ex: cf231)"))
+        self.declare_parameter("y_offset", 0.0, ParameterDescriptor(
+            description="y offset to add"))
 
         self.takeoff_height = self.get_parameter(
             "takeoff_height").get_parameter_value().double_value
         self.drone = self.get_parameter(
             "drone").get_parameter_value().string_value
+        self.y_offset = self.get_parameter(
+            "y_offset").get_parameter_value().double_value
 
         # Goto request
         self.gotoReq = GoTo.Request()
@@ -205,9 +209,8 @@ class Flight(Node):
 
             # If there are waypoints left, continue navigating
             if len(self.waypoints) > 0:
-                # point = self.waypoints.pop(0)
-                # self.goal = point
                 self.goal = self.waypoints.pop(0)
+                self.goal.y += self.y_offset
 
                 self.waypoint_pub.publish(self.goal)
                 self.gotoReq.goal = self.goal

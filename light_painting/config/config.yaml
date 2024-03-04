@@ -1,8 +1,36 @@
 # This file was taken from Crazyswarm2/crazyflie/config and has been modified
 robots:
-  cfblue:
+  cf1:
+    enabled: true
+    uri: radio://0/78/2M/E7E7E7E7E6
+    initial_position: [0, 0, 0]
+    type: cf21  # see robot_types
+    firmware_params:
+      stabilizer:
+        estimator: 2 # 1: complementary, 2: kalman
+        controller: 1 # 1: PID, 2: mellinger
+    firmware_logging:
+      enabled: true
+      default_topics:
+        pose:
+          frequency: 10 # Hz
+  cf2:
     enabled: true
     uri: radio://0/80/2M/E7E7E7E7E7
+    initial_position: [0, 0, 0]
+    type: cf21  # see robot_types
+    firmware_params:
+      stabilizer:
+        estimator: 2 # 1: complementary, 2: kalman
+        controller: 1 # 1: PID, 2: mellinger
+    firmware_logging:
+      enabled: true
+      default_topics:
+        pose:
+          frequency: 10 # Hz
+  cf3:
+    enabled: true
+    uri: radio://0/82/2M/E7E7E7E7E8
     initial_position: [0, 0, 0]
     type: cf21  # see robot_types
     firmware_params:

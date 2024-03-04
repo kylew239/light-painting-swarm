@@ -24,3 +24,6 @@ This project utilizes mutliple ROS nodes interfacing with the various hardware a
 - `camera`: A package for controlling the shutter on the DSLR Camera
 - `light_painting`: A package for controlling the drone and it's onboard LEDs
 - `light_painting_interfaces`: A package for custom interfaces used
+
+# Hardware
+* 3x Crazyflie 2.1 running 2023.11 firmware

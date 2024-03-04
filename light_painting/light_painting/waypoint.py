@@ -15,7 +15,7 @@ import math
 class Waypoint(Node):
     def __init__(self):
         super().__init__("waypoint")
-        self.declare_parameter("drone", "cf231", ParameterDescriptor(
+        self.declare_parameter("drones", ["cf231"], ParameterDescriptor(
             description="Name of the drone. Same as the namespace (ex: cf231)"))
         self.declare_parameter("left_bound", 0.05, ParameterDescriptor(
             description="Left of the bounding-box for the waypoints"))
@@ -27,11 +27,11 @@ class Waypoint(Node):
             description="Top of the bounding-box for the waypoints"))
         self.declare_parameter("resolution", 0.015, ParameterDescriptor(
             description="Resolution for the waypoint generation"))
-        self.declare_parameter("y_offset", 0.25, ParameterDescriptor(
+        self.declare_parameter("y_offset", 0.1, ParameterDescriptor(
             description="Y-axis offset for flying the waypoints"))
 
-        self.drone = self.get_parameter(
-            "drone").get_parameter_value().string_value
+        self.drones = self.get_parameter(
+            "drones").get_parameter_value().string_array_value
         self.left = self.get_parameter(
             "left_bound").get_parameter_value().double_value
         self.right = self.get_parameter(
@@ -48,15 +48,18 @@ class Waypoint(Node):
         # Use a singular callback group to ensure services don't hang
         self.cb_group = MutuallyExclusiveCallbackGroup()
 
-        # Service clients
-        self.upload_waypoints = self.create_client(Waypoints,
-                                                   self.drone + "/upload",
-                                                   callback_group=self.cb_group)
-
         # Service Server
         self.toggle = self.create_service(Generate,
                                           "generate_waypoint",
                                           self.waypoint_cb)
+
+        # Service clients for uploading
+        # This will accept an arbitrary number of drones
+        self.uploads = []
+        for drone in self.drones:
+            self.uploads.append(self.create_client(Waypoints,
+                                                   drone + "/upload",
+                                                   callback_group=self.cb_group))
 
     async def waypoint_cb(self, request, response):
         """Generates the waypoints to fly through."""
@@ -71,16 +74,23 @@ class Waypoint(Node):
                                           self.top,
                                           self.res)
 
-        self.get_logger().info(f"Finished generating {len(arrx)} waypoints")
-
-        # Generate waypoint upload request
-        waypoint_req = Waypoints.Request()
+        points_list = []
+        yaw_list = []
         for i in range(len(arrx)):
-            waypoint_req.point.append(Point(x=arrx[i],
-                                            y=self.y_offset,
-                                            z=arry[i]))
-            waypoint_req.yaw.append(0)
-        await self.upload_waypoints.call_async(waypoint_req)
+            points_list.append(Point(x=arrx[i],
+                                     y=self.y_offset,
+                                     z=arry[i]))
+            yaw_list.append(0)
+
+        self.get_logger().info(f"Finished generating {len(points_list)} waypoints")
+
+        # Generate waypoint upload request and call each one
+        interval = len(points_list)/len(self.drones)
+        waypoint_req = Waypoints.Request()
+        for i in range(len(self.drones)):
+            waypoint_req.point = points_list[int(i*interval):int((i+1)*interval)]
+            waypoint_req.yaw = yaw_list[int(i*interval):int((i+1)*interval)]
+            self.uploads[i].call_async(waypoint_req)
 
         return response
 
