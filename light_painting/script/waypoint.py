@@ -218,11 +218,11 @@ def generate_waypoints(idx_list: List[Tuple],
     return (x, y)
 
 if __name__ == "__main__":
-    idx2_list = edge_detect('tree.jpg', show=True)
+    idx2_list = edge_detect('rgb_tree.png', show=True)
     xleft = 0.05
-    xright = 0.95
+    xright = 1.95
     ybot = 0.3
-    ytop = 1.7
+    ytop = 2.5
     (arrx, arry) = generate_waypoints(idx2_list,
                                     xleft,
                                     ybot,
@@ -233,8 +233,8 @@ if __name__ == "__main__":
 
     # Plotting
     fig, ax = plt.subplots()
-    ax.set_xlim(-0.5, 1.5)
-    ax.set_ylim(0, 2.0)
+    ax.set_xlim(-0.5, 2.5)
+    ax.set_ylim(0, 3.0)
     line, = ax.plot([], [], marker='o', markersize=1,
                     color='black', alpha=1.0, linestyle='None')
 

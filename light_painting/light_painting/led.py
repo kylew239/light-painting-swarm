@@ -27,13 +27,15 @@ class LED(Node):
             descrition="Threshold distance for turning the LED off"))
         self.declare_parameter("drone", "cf231", ParameterDescriptor(
             description="Name of the drone (ex: cf231)"))
+        self.declare_parameter("color", "blue", ParameterDescriptor(
+            description="LED color to use (blue | green | red)"))
 
         self.control = self.get_parameter(
             "control").get_parameter_value().string_value
         self.threshold = self.get_parameter(
             "threshold").get_parameter_value().double_value
-        self.drone = self.get_parameter(
-            "drone").get_parameter_value().string_value
+        self.drone = self.get_parameter("drone").get_parameter_value().string_value
+        self.color = self.get_parameter("color").get_parameter_value().string_value
 
         self.waypoint = Point()
         self.prev_waypoint = Point()
@@ -49,13 +51,21 @@ class LED(Node):
         self.off_req = SetParameters.Request()
         self.off_req.parameters = [params_off]
 
-        # Turn just the blue right LED on
-        params_blue = Parameter()
-        params_blue.value.type = 2  # integer parameter
-        params_blue.name = self.drone + '.params.led.bitmask'
-        params_blue.value.integer_value = int('0b10100000', base=0)
-        self.blue_req = SetParameters.Request()
-        self.blue_req.parameters = [params_blue]
+        # parameter for turning the LED on
+        params_led = Parameter()
+        params_led.value.type = 2  # integer parameter
+        params_led.name = self.drone + '.params.led.bitmask'
+
+        # Change LED bitmask depending on color
+        if(self.color == "blue"):    
+            params_led.value.integer_value = int('0b10100000', base=0)
+        elif(self.color == "red"):
+            params_led.value.integer_value = int('0b10010000', base=0)
+        elif(self.color == "green"):
+            params_led.value.integer_value = int('0b10001000', base=0)
+
+        self.led_on = SetParameters.Request()
+        self.led_on.parameters = [params_led]
 
         # Use a singular callback group to ensure services don't hang
         self.cb_group = MutuallyExclusiveCallbackGroup()
@@ -124,7 +134,7 @@ class LED(Node):
             if (math.sqrt(dx**2 + dy**2 + dz**2) <= self.threshold) and (self.state == State.OFF):
                 # turn LED on if close
                 # Also check to make sure it was previously off
-                await self.set_param.call_async(self.blue_req)
+                await self.set_param.call_async(self.led_on)
                 self.state = State.ON
             elif self.state == State.ON:
                 # else turn off
@@ -163,7 +173,7 @@ class LED(Node):
             if (get_mag(dist_vec) < self.threshold) and (self.state == State.OFF):
                 # if distance to line is close enough, turn the LED on
                 # Also check to make sure it was previously off
-                await self.set_param.call_async(self.blue_req)
+                await self.set_param.call_async(self.led_on)
                 self.state = State.ON
             elif self.state == State.ON:
                 # else turn the LED off

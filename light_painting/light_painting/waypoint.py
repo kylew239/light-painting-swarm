@@ -17,9 +17,9 @@ class Waypoint(Node):
         super().__init__("waypoint")
         self.declare_parameter("drones", ["cf231"], ParameterDescriptor(
             description="Name of the drone. Same as the namespace (ex: cf231)"))
-        self.declare_parameter("left_bound", 0.05, ParameterDescriptor(
+        self.declare_parameter("left_bound", -0.15, ParameterDescriptor(
             description="Left of the bounding-box for the waypoints"))
-        self.declare_parameter("right_bound", 0.95, ParameterDescriptor(
+        self.declare_parameter("right_bound", 2.25, ParameterDescriptor(
             description="Right of the bounding-box for the waypoints"))
         self.declare_parameter("bot_bound", 0.30, ParameterDescriptor(
             description="Bottom of the bounding-box for the waypoints"))

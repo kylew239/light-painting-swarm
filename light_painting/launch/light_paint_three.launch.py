@@ -66,7 +66,7 @@ def generate_launch_description():
             executable='flight',
             name='flight_' + robots[0],
             parameters=[{'drone': robots[0]},
-                        {'y_offset': 0.15}],
+                        {'y_offset': -0.15}],
             on_exit=Shutdown(),
         ),
 
@@ -77,7 +77,8 @@ def generate_launch_description():
             on_exit=Shutdown(),
             parameters=[{'drone': robots[0]},
                         {'control': LaunchConfiguration('led_control')},
-                        {'threshold': LaunchConfiguration('threshold')}],
+                        {'threshold': LaunchConfiguration('threshold')},
+                        {'color': 'red'}],
         ),
 
         # Second drone
@@ -85,7 +86,8 @@ def generate_launch_description():
             package='light_painting',
             executable='flight',
             name='flight_' + robots[1],
-            parameters=[{'drone': robots[1]}],
+            parameters=[{'drone': robots[1]},
+                        {'y_offset': -0.15}],
             on_exit=Shutdown(),
         ),
 
@@ -96,7 +98,8 @@ def generate_launch_description():
             on_exit=Shutdown(),
             parameters=[{'drone': robots[1]},
                         {'control': LaunchConfiguration('led_control')},
-                        {'threshold': LaunchConfiguration('threshold')}],
+                        {'threshold': LaunchConfiguration('threshold')},
+                        {'color': 'green'}],
         ),
 
         # Third drone
@@ -116,6 +119,7 @@ def generate_launch_description():
             on_exit=Shutdown(),
             parameters=[{'drone': robots[2]},
                         {'control': LaunchConfiguration('led_control')},
-                        {'threshold': LaunchConfiguration('threshold')}],
+                        {'threshold': LaunchConfiguration('threshold')},
+                        {'color': 'blue'}],
         ),
 ])
