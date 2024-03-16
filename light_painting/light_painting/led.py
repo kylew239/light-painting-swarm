@@ -1,3 +1,16 @@
+"""
+Controls the camera shutter
+
+Parameters:
+    - drones (String): Name of the drone
+    - control (String): Type of controller for the LEDs (radius | line)
+    - threshold (double): Threshold distance for turning the LED off
+    - color (String): Color LED to use
+
+Services:
+    - shutter_start (std_msgs/Empty): service to start the shutter
+    - shutter_stop (std_msgs/Empty): service to stop the shutter
+"""
 import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup

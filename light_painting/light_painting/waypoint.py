@@ -1,3 +1,18 @@
+"""
+Generates waypoints from an image input
+
+Parameters:
+    - drones (List[String]): A list of drones names
+    - left_bound (double): Left of the bounding-box for the waypoint generation
+    - right_bound (double): Right of the bounding-box for the waypoint generation
+    - bot_bound (double): Bottom of the bounding-box for the waypoint generation
+    - top_bound (double): Top of the bounding-box for the waypoint generation
+    - resolution (double): Resolution for the waypoint generation
+    - y_offset (double): Offset in the y-direction
+
+Services:
+    - generate (light_painting_interfaces/Generate): service to input a file for waypoint generation
+"""
 import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -16,7 +31,7 @@ class Waypoint(Node):
     def __init__(self):
         super().__init__("waypoint")
         self.declare_parameter("drones", ["cf231"], ParameterDescriptor(
-            description="Name of the drone. Same as the namespace (ex: cf231)"))
+            description="Names of the drones"))
         self.declare_parameter("left_bound", -0.15, ParameterDescriptor(
             description="Left of the bounding-box for the waypoints"))
         self.declare_parameter("right_bound", 2.25, ParameterDescriptor(

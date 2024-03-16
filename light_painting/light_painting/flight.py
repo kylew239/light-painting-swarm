@@ -1,9 +1,24 @@
+"""
+Controls the camera shutter
+
+Parameters:
+    - drones (String): Name of the drone
+    - takeoff_height (double): Initial takeoff height
+    - y_offset (double): Offset in the y-direction
+
+Services:
+    - start (std_msgs/Empty): Start the flight
+    - upload (light_painting_interfaces/Waypoint): Upload a series of waypoints
+
+Publishers:
+    - waypoint (geometry_msgs/Point): The waypoint the drone is currently flying to
+"""
 import rclpy
 from rclpy.node import Node
 from enum import Enum, auto
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 
-from crazyflie_interfaces.srv import Takeoff, Land, GoTo, StartTrajectory, UploadTrajectory
+from crazyflie_interfaces.srv import Takeoff, Land, GoTo
 from std_srvs.srv import Empty
 from builtin_interfaces.msg import Duration
 from geometry_msgs.msg import Point, PoseStamped
@@ -82,14 +97,6 @@ class Flight(Node):
         self.cf_goto = self.create_client(GoTo,
                                           self.drone + "/go_to",
                                           callback_group=self.cb_group)
-
-        self.upload_trajectory = self.create_client(UploadTrajectory,
-                                                    self.drone + "/upload_trajectory",
-                                                    callback_group=self.cb_group)
-
-        self.traj = self.create_client(StartTrajectory,
-                                       self.drone + "/start_trajectory",
-                                       callback_group=self.cb_group)
 
         self.set_param = self.create_client(SetParameters,
                                             "/crazyflie_server/set_parameters",
