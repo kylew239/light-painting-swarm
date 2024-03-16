@@ -1,7 +1,7 @@
 # A package for controlling Crazyflie drones to light paints
 - Author: Kyle Wang
 - [Portfolio Post](https://kylew239.github.io/in_progress/crazyflie/)
-- Project Duration: 1/03/24 - Present
+- Project Duration: 1/03/24 - 3/16/24
 
 This project uses three Crazyflie Drones to create a long-exposure picture. The camera captures the light emitted by the on-board LEDs over the course of the drones trajectory to create images.
 
