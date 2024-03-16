@@ -14,7 +14,7 @@ This package contains the LED controller, a flight controller wrapper, and a way
 Arguments (pass arguments as '<name>:=<value>'):
 
     'led_control':
-        Determines the LED controller mode(radius | line)
+        Determines the LED controller mode (radius | line)
         (default: 'radius')
 
     'threshold':
